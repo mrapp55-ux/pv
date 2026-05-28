@@ -36,6 +36,11 @@ pub fn run() {
             cmd_move_vault,
             cmd_relocate_vault,
             cmd_detect_google_drive,
+            cmd_get_vault_location,
+            cmd_set_use_google_drive,
+            cmd_get_auto_lock_minutes,
+            cmd_set_auto_lock_minutes,
+            cmd_change_master_password,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

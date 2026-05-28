@@ -1,13 +1,18 @@
-import { useEffect } from 'react';
-import { isUnlocked, isVaultInitialized } from './services/tauri-bridge';
+import { useEffect, useRef } from 'react';
+import { getAutoLockMinutes, isUnlocked, isVaultInitialized, lockVault } from './services/tauri-bridge';
 import { useVaultStore } from './store/vault';
 import SetupPage from './pages/SetupPage';
 import UnlockPage from './pages/UnlockPage';
 import VaultPage from './pages/VaultPage';
 
-export default function App() {
-  const { authState, setAuthState } = useVaultStore();
+const ACTIVITY_EVENTS = ['mousemove', 'keydown', 'mousedown', 'click', 'scroll'] as const;
 
+export default function App() {
+  const { authState, setAuthState, reset } = useVaultStore();
+  const lockTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const autoLockMsRef = useRef<number>(5 * 60 * 1000);
+
+  // Load initial vault state
   useEffect(() => {
     void (async () => {
       const initialized = await isVaultInitialized();
@@ -16,6 +21,37 @@ export default function App() {
       setAuthState(unlocked ? 'unlocked' : 'locked');
     })();
   }, []);
+
+  // Load auto-lock setting once
+  useEffect(() => {
+    getAutoLockMinutes().then(m => { autoLockMsRef.current = m * 60 * 1000; }).catch(() => {});
+  }, []);
+
+  // Inactivity auto-lock
+  useEffect(() => {
+    if (authState !== 'unlocked') {
+      if (lockTimerRef.current) clearTimeout(lockTimerRef.current);
+      return;
+    }
+
+    const schedule = () => {
+      if (lockTimerRef.current) clearTimeout(lockTimerRef.current);
+      if (autoLockMsRef.current <= 0) return;
+      lockTimerRef.current = setTimeout(async () => {
+        await lockVault();
+        reset();
+        setAuthState('locked');
+      }, autoLockMsRef.current);
+    };
+
+    ACTIVITY_EVENTS.forEach(e => window.addEventListener(e, schedule, { passive: true }));
+    schedule();
+
+    return () => {
+      ACTIVITY_EVENTS.forEach(e => window.removeEventListener(e, schedule));
+      if (lockTimerRef.current) clearTimeout(lockTimerRef.current);
+    };
+  }, [authState]);
 
   if (authState === 'loading') {
     return (
@@ -27,5 +63,5 @@ export default function App() {
 
   if (authState === 'setup') return <SetupPage />;
   if (authState === 'locked') return <UnlockPage />;
-  return <VaultPage />;
+  return <VaultPage onAutoLockChange={m => { autoLockMsRef.current = m * 60 * 1000; }} />;
 }

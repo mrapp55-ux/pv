@@ -130,14 +130,22 @@ apps/desktop/
 
 ### Desktop vault storage (sync)
 
-The desktop app stores `vault.db` and `vault.salt` in a user-configurable folder. During setup, it auto-detects the Google Drive "My Drive" folder (Windows: registry scan + drive letter scan; macOS: `~/Library/CloudStorage/GoogleDrive*/My Drive`). The user can override via a native folder picker.
+The desktop app stores `vault.db` and `vault.salt` in a user-configurable folder. During setup, it auto-detects the Google Drive "My Drive" folder (Windows: registry scan + drive letter scan; macOS: `~/Library/CloudStorage/GoogleDrive*/My Drive`). The user can override via the Settings panel.
 
 When the vault is stored in a Google Drive folder, the native Google Drive desktop client syncs `vault.db` and `vault.salt` to the cloud and to all other computers automatically — **no API calls are needed from the desktop app**.
 
-Vault location is stored in `%APPDATA%\PasswordVault\config.json`. Key commands:
-- `cmd_detect_google_drive` — returns the My Drive path or null
-- `cmd_set_vault_folder` — saves the folder preference
+Vault config is stored in `%APPDATA%\PasswordVault\config.json` with fields:
+- `vault_folder` — absolute path for custom/local storage (null when using Google Drive mode)
+- `use_google_drive` — when `true`, the drive letter is detected at runtime so it survives remounts to a different letter
+- `auto_lock_minutes` — inactivity timeout (0 = disabled, default 5)
+
+Key commands:
+- `cmd_get_vault_location` — returns `VaultLocationInfo` (resolved folder, GDrive flag, GDrive availability)
+- `cmd_set_use_google_drive(enabled)` — toggles Google Drive mode; clears `vault_folder` when enabled
+- `cmd_set_vault_folder(folder)` — saves a custom path and sets `use_google_drive = false`
 - `cmd_relocate_vault` — moves files to a new folder while the vault is open (closes DB, copies files, reopens)
+- `cmd_get_auto_lock_minutes` / `cmd_set_auto_lock_minutes` — inactivity timeout setting
+- `cmd_change_master_password(old, new)` — verifies old password, re-encrypts all entry fields in one SQLite transaction, rekeys the SQLCipher DB with `PRAGMA rekey`, updates the salt sidecar, and refreshes the in-memory session and keychain
 
 ### Mobile app routing
 

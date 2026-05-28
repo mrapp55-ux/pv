@@ -7,13 +7,17 @@ use tauri::State;
 
 use crate::error::{Result, VaultError};
 use crate::state::{AppState, SessionKey};
-use crypto::{derive_key, generate_salt, hkdf_field_key};
+use crypto::{derive_key, generate_salt, hkdf_field_key, encrypt_field, decrypt_field};
 use database::{
     delete_entry, get_entry, insert_metadata, init_schema, migrate_schema, list_entries,
     open_encrypted, create_entry, update_entry, get_salt, EntryDetail, EntryInput, EntryListItem,
 };
 use biometric::{is_biometric_available, is_key_stored, request_windows_hello, retrieve_key, store_key};
-pub use sync::{cmd_get_vault_folder, cmd_set_vault_folder, cmd_move_vault, cmd_detect_google_drive};
+pub use sync::{
+    cmd_get_vault_folder, cmd_set_vault_folder, cmd_move_vault, cmd_detect_google_drive,
+    cmd_get_auto_lock_minutes, cmd_set_auto_lock_minutes,
+    cmd_get_vault_location, cmd_set_use_google_drive,
+};
 
 fn device_id() -> String {
     const SVC: &str = "password-vault-device";
@@ -184,6 +188,91 @@ pub fn cmd_enable_biometric(state: State<AppState>) -> Result<()> {
 #[tauri::command]
 pub fn cmd_disable_biometric() -> Result<()> {
     biometric::delete_key()
+}
+
+/// Change master password: verify old password, re-encrypt all fields, rekey the DB.
+#[tauri::command]
+pub fn cmd_change_master_password(
+    old_password: String,
+    new_password: String,
+    state: State<AppState>,
+) -> Result<()> {
+    // 1. Verify old password matches the current session key
+    let salt_b64 = std::fs::read_to_string(sync::salt_path())
+        .map_err(|_| VaultError::Other("Salt file missing".into()))?;
+    let old_salt = base64::Engine::decode(&base64::engine::general_purpose::STANDARD, &salt_b64)
+        .map_err(|e| VaultError::Crypto(e.to_string()))?;
+    let old_master = derive_key(&old_password, &old_salt)?;
+    {
+        let guard = state.session.lock().unwrap();
+        let session = guard.as_ref().ok_or(VaultError::Locked)?;
+        if *old_master != *session.master {
+            return Err(VaultError::WrongPassword);
+        }
+    }
+
+    // 2. Derive new key material
+    let new_salt_bytes = generate_salt();
+    let new_master = derive_key(&new_password, &new_salt_bytes)?;
+    let new_fp  = hkdf_field_key(&new_master, "password");
+    let new_fn_ = hkdf_field_key(&new_master, "notes");
+    let new_fsq = hkdf_field_key(&new_master, "security_questions");
+    let new_key_hex = hex::encode(*new_master);
+    let new_salt_b64 = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &new_salt_bytes);
+
+    // 3. Re-encrypt all entry fields in a single transaction
+    {
+        let db_guard  = state.db.lock().unwrap();
+        let conn      = db_guard.as_ref().ok_or(VaultError::Locked)?;
+        let sess_guard = state.session.lock().unwrap();
+        let session   = sess_guard.as_ref().ok_or(VaultError::Locked)?;
+
+        let entries: Vec<(String, String, Option<String>, Option<String>)> = {
+            let mut stmt = conn.prepare(
+                "SELECT id, password_enc, notes_enc, security_questions_enc
+                 FROM vault_entries WHERE deleted_at IS NULL"
+            )?;
+            let rows = stmt.query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)))?
+                .collect::<rusqlite::Result<Vec<_>>>()?;
+            rows
+        };
+
+        conn.execute_batch("BEGIN")?;
+        for (id, pw_enc, notes_enc, sq_enc) in &entries {
+            let new_pw = {
+                let plain = decrypt_field(&session.field_password, pw_enc)?;
+                encrypt_field(&new_fp, &plain)?
+            };
+            let new_notes = notes_enc.as_deref()
+                .map(|n| { let p = decrypt_field(&session.field_notes, n)?; encrypt_field(&new_fn_, &p) })
+                .transpose()?;
+            let new_sq = sq_enc.as_deref()
+                .map(|sq| { let p = decrypt_field(&session.field_security_questions, sq)?; encrypt_field(&new_fsq, &p) })
+                .transpose()?;
+            conn.execute(
+                "UPDATE vault_entries SET password_enc=?1, notes_enc=?2, security_questions_enc=?3 WHERE id=?4",
+                rusqlite::params![new_pw, new_notes, new_sq, id],
+            )?;
+        }
+        conn.execute("UPDATE vault_metadata SET salt=?1 WHERE id=1", rusqlite::params![new_salt_b64])?;
+        conn.execute_batch("COMMIT")?;
+
+        // Rekey the SQLCipher database (uses same cipher params already set on connection)
+        conn.execute_batch(&format!("PRAGMA rekey = \"x'{new_key_hex}'\";"))?;
+    }
+
+    // 4. Update salt sidecar file
+    std::fs::write(sync::salt_path(), &new_salt_b64)?;
+
+    // 5. Replace in-memory session with new keys
+    *state.session.lock().unwrap() = Some(SessionKey::new(*new_master, *new_fp, *new_fn_, *new_fsq));
+
+    // 6. Update biometric keychain entry if one exists
+    if is_key_stored() {
+        let _ = store_key(&new_master);
+    }
+
+    Ok(())
 }
 
 /// Move vault files to a new folder while session is active, then reopen from new location.

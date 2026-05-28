@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import {
-  detectGoogleDrive,
+  getVaultLocation,
   generatePassword,
   initializeVault,
   isBiometricAvailable,
@@ -39,15 +39,12 @@ export default function SetupPage() {
   // Auto-detect Google Drive on mount
   useEffect(() => {
     void (async () => {
-      const drive = await detectGoogleDrive().catch(() => null);
-      if (drive) {
-        const suggested = drive.replace(/\\/g, '/') + '/PasswordVault';
-        setDriveDetected(suggested);
-        setVaultFolderState(suggested);
-        setLocationReady(true);
-      } else {
-        setLocationReady(true); // will use default %LOCALAPPDATA% path
+      const loc = await getVaultLocation().catch(() => null);
+      if (loc?.google_drive_available && loc.google_drive_folder) {
+        setDriveDetected(loc.google_drive_folder);
+        setVaultFolderState(loc.google_drive_folder);
       }
+      setLocationReady(true);
     })();
   }, []);
 

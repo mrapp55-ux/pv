@@ -69,7 +69,8 @@ export default function NewEntryPanel({
       <F label="Notes" value={notes} onChange={setNotes} multiline />
 
       <div style={{ marginBottom: 14 }}>
-        <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', userSelect: 'none' }}>
+        <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer', userSelect: 'none' }}>
+          <span className="field-label" style={{ margin: 0, display: 'inline' }}>Security Questions</span>
           <input
             type="checkbox"
             checked={showSQ}
@@ -78,8 +79,8 @@ export default function NewEntryPanel({
               if (e.target.checked && securityQuestions.length === 0)
                 setSecurityQuestions([{ question: '', answer: '' }]);
             }}
+            style={{ width: 'auto', cursor: 'pointer' }}
           />
-          <span className="field-label" style={{ margin: 0 }}>Security Questions</span>
         </label>
         {showSQ && (
           <SecurityQuestionsEditor questions={securityQuestions} onChange={setSecurityQuestions} />
@@ -140,27 +141,28 @@ function SecurityQuestionsEditor({
   return (
     <div style={{ marginTop: 10 }}>
       {questions.map((q, i) => (
-        <div key={i} style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 8 }}>
-          <span style={sq.label}>Q{i + 1}</span>
+        <div key={i} style={{ marginBottom: 10, border: '1px solid var(--border)', borderRadius: 6, padding: '8px 10px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+            <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)' }}>Q{i + 1}</span>
+            <button className="icon-btn" onClick={() => remove(i)} style={{ width: 26, height: 22, color: 'var(--danger)', padding: 0 }}>−</button>
+          </div>
           <input
             value={q.question}
             onChange={e => update(i, 'question', e.target.value)}
             placeholder="Security question"
-            style={{ flex: 2, fontSize: 13 }}
+            style={{ marginBottom: 6 }}
           />
-          <input
-            type={showAnswers[i] ? 'text' : 'password'}
-            value={q.answer}
-            onChange={e => update(i, 'answer', e.target.value)}
-            placeholder="Answer"
-            style={{ flex: 1, fontSize: 13 }}
-          />
-          <button className="icon-btn" onClick={() => toggleShow(i)} style={{ width: 30 }}>
-            {showAnswers[i] ? '🙈' : '👁'}
-          </button>
-          <button className="icon-btn" onClick={() => remove(i)} style={{ width: 30, color: 'var(--danger)' }}>
-            −
-          </button>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <input
+              type={showAnswers[i] ? 'text' : 'password'}
+              value={q.answer}
+              onChange={e => update(i, 'answer', e.target.value)}
+              placeholder="Answer"
+            />
+            <button className="icon-btn" onClick={() => toggleShow(i)} style={{ width: 36, flexShrink: 0 }}>
+              {showAnswers[i] ? '🙈' : '👁'}
+            </button>
+          </div>
         </div>
       ))}
       <button className="ghost" onClick={add} style={{ fontSize: 12, padding: '4px 10px' }}>

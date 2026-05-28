@@ -101,24 +101,40 @@ export const generatePassword = (opts?: {
 
 // ─── Vault location / sync ────────────────────────────────────────────────────
 
-/** Returns the currently configured vault folder, or null if using default. */
-export const getVaultFolder = () =>
-  invoke<string | null>('cmd_get_vault_folder');
+export interface VaultLocationInfo {
+  use_google_drive: boolean;
+  resolved_folder: string;
+  google_drive_available: boolean;
+  google_drive_folder: string | null;
+}
 
-/** Save vault folder preference (creates the folder if it doesn't exist). */
+/** Full vault location info — use this instead of getVaultFolder. */
+export const getVaultLocation = () =>
+  invoke<VaultLocationInfo>('cmd_get_vault_location');
+
+/** Switch to Google Drive auto-detect mode (true) or custom/local (false). */
+export const setUseGoogleDrive = (enabled: boolean) =>
+  invoke<void>('cmd_set_use_google_drive', { enabled });
+
+/** Save a custom vault folder path and switch to local mode. */
 export const setVaultFolder = (folder: string) =>
   invoke<void>('cmd_set_vault_folder', { folder });
 
-/**
- * Move vault.db + vault.salt to a new folder while the vault is open.
- * The DB is closed, files copied, config updated, DB reopened automatically.
- */
+/** Move vault.db + vault.salt to a new folder while the vault is open. */
 export const relocateVault = (newFolder: string) =>
   invoke<void>('cmd_relocate_vault', { newFolder });
 
-/** Detect the Google Drive "My Drive" root on this machine, or null if not found. */
-export const detectGoogleDrive = () =>
-  invoke<string | null>('cmd_detect_google_drive');
+/** Get auto-lock timeout in minutes (0 = disabled, default 5). */
+export const getAutoLockMinutes = () =>
+  invoke<number>('cmd_get_auto_lock_minutes');
+
+/** Persist auto-lock timeout in minutes (0 = disabled). */
+export const setAutoLockMinutes = (minutes: number) =>
+  invoke<void>('cmd_set_auto_lock_minutes', { minutes });
+
+/** Change master password — verifies old, re-encrypts all fields, rekeys DB. */
+export const changeMasterPassword = (oldPassword: string, newPassword: string) =>
+  invoke<void>('cmd_change_master_password', { oldPassword, newPassword });
 
 /**
  * Open a native folder picker dialog.
