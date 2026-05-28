@@ -1,0 +1,43 @@
+{
+  "expo": {
+    "name": "Password Vault",
+    "slug": "password-vault",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "scheme": "vault",
+    "userInterfaceStyle": "automatic",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#1a1a2e"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.passwordvault.app",
+      "infoPlist": {
+        "NSFaceIDUsageDescription": "Face ID is used to unlock your password vault without typing your master password."
+      }
+    },
+    "android": {
+      "package": "com.passwordvault.app",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#1a1a2e"
+      }
+    },
+    "plugins": [
+      "expo-router",
+      "expo-screen-capture",
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Allow Password Vault to use Face ID."
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}

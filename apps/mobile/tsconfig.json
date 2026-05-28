@@ -1,0 +1,11 @@
+{
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": {
+    "strict": true,
+    "paths": {
+      "@vault/shared-types": ["../../packages/shared-types/src/index.ts"],
+      "@vault/shared-crypto": ["../../packages/shared-crypto/src/index.ts"],
+      "@vault/shared-db": ["../../packages/shared-db/src/index.ts"]
+    }
+  }
+}

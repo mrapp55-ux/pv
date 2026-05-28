@@ -1,0 +1,58 @@
+[package]
+name = "password-vault-desktop"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "app_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon"] }
+tauri-plugin-shell = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Database — SQLCipher bundled (no system OpenSSL needed)
+rusqlite = { version = "0.32", features = ["bundled-sqlcipher-vendored-openssl"] }
+
+# Cryptography
+argon2 = "0.5"
+aes-gcm = "0.10"
+hkdf = "0.12"
+sha2 = "0.10"
+zeroize = { version = "1.8", features = ["derive", "zeroize_derive"] }
+
+# Utilities
+rand = "0.8"
+uuid = { version = "1", features = ["v4", "fast-rng"] }
+base64 = "0.22"
+hex = "0.4"
+keyring = "3"
+once_cell = "1"
+tokio = { version = "1", features = ["rt", "rt-multi-thread"] }
+thiserror = "1"
+dirs = "5"
+
+# Tauri plugins
+tauri-plugin-dialog = "2"
+
+# Windows Hello + registry (Windows-only)
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.57", features = [
+    "Security_Credentials_UI",
+    "Foundation",
+] }
+winreg = "0.52"
+
+[profile.dev]
+incremental = true
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+panic = "abort"

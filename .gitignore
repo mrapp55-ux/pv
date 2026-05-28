@@ -1,0 +1,18 @@
+node_modules/
+.turbo/
+dist/
+.expo/
+*.tsbuildinfo
+.env
+.env.local
+ios/
+android/
+*.db
+*.db-shm
+*.db-wal
+
+# Rust build artifacts
+target/
+
+# Claude Code local (machine-specific) settings
+.claude/settings.local.json
