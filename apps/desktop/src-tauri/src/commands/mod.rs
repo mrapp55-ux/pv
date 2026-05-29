@@ -20,7 +20,7 @@ pub use sync::{
 };
 
 fn device_id() -> String {
-    const SVC: &str = "password-vault-device";
+    const SVC: &str = "pv-device";
     const USR: &str = "device-id";
     if let Ok(entry) = keyring::Entry::new(SVC, USR) {
         if let Ok(id) = entry.get_password() {

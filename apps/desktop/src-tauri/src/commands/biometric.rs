@@ -11,7 +11,7 @@ use keyring::Entry;
 use base64::Engine;
 use crate::error::{Result, VaultError};
 
-const KEYRING_SERVICE: &str = "password-vault";
+const KEYRING_SERVICE: &str = "pv";
 const KEYRING_USER: &str = "vault-encryption-key";
 
 /// Store the 32-byte vault key in the OS keychain.

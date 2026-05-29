@@ -12,7 +12,7 @@ struct Config {
 fn config_path() -> PathBuf {
     dirs::config_dir()
         .unwrap_or_else(|| PathBuf::from("."))
-        .join("PasswordVault")
+        .join("PV")
         .join("config.json")
 }
 
@@ -41,7 +41,7 @@ fn resolve_vault_folder() -> PathBuf {
     let cfg = read_config();
     if cfg.use_google_drive.unwrap_or(false) {
         if let Some(root) = detect_google_drive_root() {
-            return root.join("PasswordVault");
+            return root.join("PV");
         }
         // Google Drive not found — fall through to local default
     }
@@ -49,7 +49,7 @@ fn resolve_vault_folder() -> PathBuf {
         Some(f) => PathBuf::from(normalize_path(&f)),
         None => dirs::data_local_dir()
             .unwrap_or_else(|| PathBuf::from("."))
-            .join("PasswordVault"),
+            .join("PV"),
     }
 }
 
@@ -76,7 +76,7 @@ pub fn cmd_get_vault_location() -> VaultLocationInfo {
     let cfg = read_config();
     let use_google_drive = cfg.use_google_drive.unwrap_or(false);
     let gd_folder = detect_google_drive_root()
-        .map(|p| p.join("PasswordVault").to_string_lossy().to_string())
+        .map(|p| p.join("PV").to_string_lossy().to_string())
         .map(|s| normalize_path(&s));
     let google_drive_available = gd_folder.is_some();
     let resolved_folder = normalize_path(&resolve_vault_folder().to_string_lossy());

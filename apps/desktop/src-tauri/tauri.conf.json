@@ -1,7 +1,7 @@
 {
-  "productName": "Password Vault",
+  "productName": "PV",
   "version": "1.0.0",
-  "identifier": "com.passwordvault.app",
+  "identifier": "com.pv.app",
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://localhost:5173",
@@ -11,7 +11,7 @@
   "app": {
     "windows": [
       {
-        "title": "Password Vault",
+        "title": "PV",
         "width": 1024,
         "height": 680,
         "minWidth": 800,
