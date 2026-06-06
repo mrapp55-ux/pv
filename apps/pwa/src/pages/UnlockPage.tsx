@@ -48,7 +48,7 @@ export default function UnlockPage({
                 autoComplete="current-password"
               />
               <button style={s.iconBtn} onClick={() => setShowPw(v => !v)} tabIndex={-1}>
-                {showPw ? '🙈' : '👁'}
+                {showPw ? '👁' : '🙈'}
               </button>
             </div>
             <button
