@@ -58,6 +58,16 @@ pnpm --filter @vault/desktop tauri:build
 # Installer output: apps/desktop/src-tauri/target/release/bundle/
 ```
 
+### PWA — local dev server (for testing before deploying)
+```sh
+pnpm --filter @vault/pwa dev
+# Opens at http://localhost:5173
+```
+
+### PWA — deploy to iPhone
+Push any change to `apps/pwa/**` to the `master` branch. GitHub Actions automatically builds and deploys to:
+`https://mrapp55-ux.github.io/pv/`
+
 ## Architecture
 
 ### Monorepo layout
@@ -66,8 +76,9 @@ packages/shared-types/    TypeScript interfaces (VaultEntry, SyncMetadata, etc.)
 packages/shared-crypto/   Crypto primitives: Argon2id, AES-256-GCM, HKDF, key lifecycle
 packages/shared-db/       SQLite schema DDL, parameterized query strings, migrations
 packages/shared-ui/       Shared React/RN components
-apps/mobile/              Expo + React Native app
+apps/mobile/              Expo + React Native app (unused — replaced by PWA)
 apps/desktop/             Tauri v2 app (React/Vite frontend + Rust backend)
+apps/pwa/                 iPhone PWA — hosted on GitHub Pages, read-only vault access
 ```
 
 ### Encryption architecture (critical to understand)
@@ -146,6 +157,48 @@ Key commands:
 - `cmd_relocate_vault` — moves files to a new folder while the vault is open (closes DB, copies files, reopens)
 - `cmd_get_auto_lock_minutes` / `cmd_set_auto_lock_minutes` — inactivity timeout setting
 - `cmd_change_master_password(old, new)` — verifies old password, re-encrypts all entry fields in one SQLite transaction, rekeys the SQLCipher DB with `PRAGMA rekey`, updates the salt sidecar, and refreshes the in-memory session and keychain
+
+### PWA (iPhone) architecture
+
+`apps/pwa/` — React + Vite PWA, deployed to GitHub Pages, read-only vault access on iPhone.
+
+```
+apps/pwa/
+  src/
+    App.tsx                   Root: Google sign-in, vault cache, unlock flow
+    store.ts                  Zustand store (step, entries, groups)
+    types.ts                  SidecarEntry, SidecarGroup types
+    pages/UnlockPage.tsx      Google sign-in or password entry + Sync button
+    pages/VaultPage.tsx       Entry list, group filter, search, detail, tap-to-copy
+    services/drive.ts         Google Drive REST API — downloads vault.salt + vault.enc
+    services/crypto.ts        HKDF-SHA256 + AES-256-GCM sidecar decryption (WebCrypto)
+    services/keyDerivation.ts Argon2id WASM via hash-wasm; swap here for Face ID later
+```
+
+**PWA unlock flow:**
+1. App checks `localStorage` for cached `pv_salt` + `pv_enc`
+2. If cached: go straight to password screen (no Google sign-in needed)
+3. If not cached: Google sign-in → download files from Drive → cache locally → password screen
+4. "Sync from Drive" button on password screen triggers Google sign-in to refresh cache
+
+**Sidecar (`vault.enc`):**
+- Desktop writes `vault.enc` to `G:\My Drive\PV\` after every entry mutation
+- Encrypted with `HKDF(masterKey, "pwa_sidecar")` + AES-256-GCM
+- Contains all decrypted entries as JSON — PWA decrypts client-side with master password
+- Google Drive desktop client syncs it to the cloud automatically
+
+**Google OAuth:**
+- Project: PVault (`console.cloud.google.com`)
+- Client ID: `438051825508-659g53fg64n070p5l83uo1plii8nu5bb.apps.googleusercontent.com`
+- Scope: `drive.readonly` (read all Drive files — needed because files are synced by desktop client, not created via API)
+- Status: Testing mode (only `mrapp55@gmail.com` is a test user) — fine for personal use, no 7-day token expiry because implicit flow is used (no refresh tokens)
+- Authorized JS origins: `http://localhost:5173` (dev) + `https://mrapp55-ux.github.io` (prod)
+
+**GitHub Pages:**
+- Repo: `https://github.com/mrapp55-ux/pv` (public)
+- Live URL: `https://mrapp55-ux.github.io/pv/`
+- Deploy: automatic via `.github/workflows/deploy-pwa.yml` on push to `apps/pwa/**`
+- Secret required: `VITE_GOOGLE_CLIENT_ID` in repo Settings → Secrets → Actions
 
 ### Mobile app routing
 
