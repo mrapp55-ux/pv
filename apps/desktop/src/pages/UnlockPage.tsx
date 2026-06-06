@@ -91,8 +91,8 @@ export default function UnlockPage() {
           />
           <button
             type="button"
+            className="icon-btn"
             onClick={() => setShowPw(v => !v)}
-            style={s.eyeBtn}
             tabIndex={-1}
           >
             {showPw ? '👁' : '🙈'}
@@ -124,5 +124,4 @@ const s: Record<string, React.CSSProperties> = {
   orText: { color: 'var(--text-muted)', fontSize: 12 },
   error: { color: 'var(--danger)', fontSize: 13, marginBottom: 10 },
   deleteLink: { marginTop: 16, width: '100%', background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: 12, cursor: 'pointer', textDecoration: 'underline', padding: 0 },
-  eyeBtn: { background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 6, cursor: 'pointer', fontSize: 16, padding: '0 10px' },
 };
