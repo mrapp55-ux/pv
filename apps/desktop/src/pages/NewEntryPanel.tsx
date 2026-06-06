@@ -1,17 +1,20 @@
 import { useState } from 'react';
-import { createEntry, generatePassword, type SecurityQuestion } from '../services/tauri-bridge';
+import { createEntry, generatePassword, type SecurityQuestion, type Group } from '../services/tauri-bridge';
 
 export default function NewEntryPanel({
-  onSaved, onCancel,
+  onSaved, onCancel, groups, defaultGroupId,
 }: {
   onSaved: (id: string) => void;
   onCancel: () => void;
+  groups: Group[];
+  defaultGroupId: string | null;
 }) {
   const [title, setTitle] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [url, setUrl] = useState('');
   const [notes, setNotes] = useState('');
+  const [groupId, setGroupId] = useState<string | null>(defaultGroupId ?? (groups[0]?.id ?? null));
   const [showPw, setShowPw] = useState(false);
   const [showSQ, setShowSQ] = useState(false);
   const [securityQuestions, setSecurityQuestions] = useState<SecurityQuestion[]>([]);
@@ -35,6 +38,7 @@ export default function NewEntryPanel({
         url: url.trim() || null,
         notes: notes.trim() || null,
         security_questions: showSQ && securityQuestions.length > 0 ? securityQuestions : null,
+        group_id: groupId,
       });
       onSaved(id);
     } catch (e) { setError(String(e)); }
@@ -45,6 +49,19 @@ export default function NewEntryPanel({
     <div style={s.panel}>
       <h2 style={s.heading}>New Entry</h2>
       {error && <p style={s.error}>{error}</p>}
+
+      {groups.length > 1 && (
+        <div style={{ marginBottom: 14 }}>
+          <label className="field-label">Group</label>
+          <select
+            value={groupId ?? ''}
+            onChange={e => setGroupId(e.target.value || null)}
+            style={{ fontSize: 13, padding: '6px 8px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text)', width: '100%', cursor: 'pointer' }}
+          >
+            {groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
+          </select>
+        </div>
+      )}
 
       <F label="Title *" value={title} onChange={setTitle} autoFocus />
       <F label="Username / Email" value={username} onChange={setUsername} autoComplete="username" />

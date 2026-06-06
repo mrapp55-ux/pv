@@ -15,15 +15,20 @@ export const Q = {
   getMetadata: `SELECT * FROM vault_metadata WHERE id = 1`,
   incrementSyncSeq: `UPDATE vault_metadata SET sync_seq = sync_seq + 1 WHERE id = 1`,
 
-  // vault_entries — list
+  // groups
+  listGroups: `SELECT id, name, created_at FROM groups ORDER BY created_at ASC`,
+  insertGroup: `INSERT INTO groups (id, name, created_at) VALUES (?, ?, ?)`,
+  renameGroup: `UPDATE groups SET name = ? WHERE id = ?`,
+
+  // vault_entries — list (group_id included for in-memory filtering)
   listEntries: `
-    SELECT id, title, username, url, created_at, modified_at, modified_by
+    SELECT id, title, username, url, modified_at, group_id
     FROM vault_entries
     WHERE deleted_at IS NULL
     ORDER BY title COLLATE NOCASE ASC
   `,
   searchEntries: `
-    SELECT id, title, username, url, created_at, modified_at, modified_by
+    SELECT id, title, username, url, modified_at, group_id
     FROM vault_entries
     WHERE deleted_at IS NULL
       AND (title LIKE ? OR username LIKE ? OR url LIKE ?)
@@ -38,13 +43,13 @@ export const Q = {
   // vault_entries — write
   insertEntry: `
     INSERT INTO vault_entries
-      (id, title, username, password_enc, url, notes_enc, created_at, modified_at, modified_by)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (id, title, username, password_enc, url, notes_enc, group_id, created_at, modified_at, modified_by)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `,
   updateEntry: `
     UPDATE vault_entries
     SET title = ?, username = ?, password_enc = ?, url = ?, notes_enc = ?,
-        modified_at = ?, modified_by = ?
+        group_id = ?, modified_at = ?, modified_by = ?
     WHERE id = ? AND deleted_at IS NULL
   `,
   softDeleteEntry: `

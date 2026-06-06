@@ -1,14 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
-import { deleteEntry, getEntry, updateEntry, type EntryDetail, type SecurityQuestion } from '../services/tauri-bridge';
+import { deleteEntry, getEntry, updateEntry, type EntryDetail, type SecurityQuestion, type Group } from '../services/tauri-bridge';
 
 const CLIPBOARD_CLEAR_MS = 30_000;
 
 export default function EntryDetailPanel({
-  id, onUpdated, onDeleted,
+  id, onUpdated, onDeleted, groups,
 }: {
   id: string;
   onUpdated: () => Promise<void>;
   onDeleted: () => void;
+  groups: Group[];
 }) {
   const [entry, setEntry] = useState<EntryDetail | null>(null);
   const [editing, setEditing] = useState(false);
@@ -24,6 +25,7 @@ export default function EntryDetailPanel({
   const [password, setPassword] = useState('');
   const [url, setUrl] = useState('');
   const [notes, setNotes] = useState('');
+  const [groupId, setGroupId] = useState<string | null>(null);
   const [showSQ, setShowSQ] = useState(false);
   const [securityQuestions, setSecurityQuestions] = useState<SecurityQuestion[]>([]);
 
@@ -36,6 +38,7 @@ export default function EntryDetailPanel({
     setEntry(e);
     setTitle(e.title); setUsername(e.username ?? '');
     setPassword(e.password); setUrl(e.url ?? ''); setNotes(e.notes ?? '');
+    setGroupId(e.group_id);
     const sqs = e.security_questions ?? [];
     setSecurityQuestions(sqs);
     setShowSQ(sqs.length > 0);
@@ -58,6 +61,7 @@ export default function EntryDetailPanel({
         title: title.trim(), username: username.trim() || null,
         password, url: url.trim() || null, notes: notes.trim() || null,
         security_questions: showSQ && securityQuestions.length > 0 ? securityQuestions : null,
+        group_id: groupId,
       });
       await onUpdated();
       await load();
@@ -79,6 +83,20 @@ export default function EntryDetailPanel({
         <h2 style={s.heading}>Edit Entry</h2>
         {error && <p style={s.error}>{error}</p>}
         <F label="Title" value={title} onChange={setTitle} />
+
+        {groups.length > 1 && (
+          <div style={{ marginBottom: 14 }}>
+            <label className="field-label">Group</label>
+            <select
+              value={groupId ?? ''}
+              onChange={e => setGroupId(e.target.value || null)}
+              style={{ fontSize: 13, padding: '6px 8px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text)', width: '100%', cursor: 'pointer' }}
+            >
+              {groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
+            </select>
+          </div>
+        )}
+
         <F label="Username / Email" value={username} onChange={setUsername} autoComplete="username" />
         <F label="Password" value={password} onChange={setPassword} type="password" showToggle />
         <F label="URL" value={url} onChange={setUrl} type="url" />
@@ -122,6 +140,15 @@ export default function EntryDetailPanel({
           <button className="danger" onClick={handleDelete}>Delete</button>
         </div>
       </div>
+
+      {groups.length > 1 && entry.group_id && (
+        <div style={{ marginBottom: 12 }}>
+          <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Group</span>
+          <div style={{ fontSize: 13, color: 'var(--text)', marginTop: 2 }}>
+            {groups.find(g => g.id === entry.group_id)?.name ?? '—'}
+          </div>
+        </div>
+      )}
 
       {copied && (
         <div style={s.copiedBanner}>

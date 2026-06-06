@@ -18,11 +18,17 @@ export const MIGRATIONS: Migration[] = [
       SELECT 1;
     `,
   },
-  // Future migrations go here:
-  // {
-  //   version: 2,
-  //   sql: `ALTER TABLE vault_entries ADD COLUMN favicon_url TEXT;`,
-  // },
+  {
+    version: 2,
+    sql: `
+      CREATE TABLE IF NOT EXISTS groups (
+        id         TEXT PRIMARY KEY,
+        name       TEXT NOT NULL UNIQUE,
+        created_at INTEGER NOT NULL
+      );
+      ALTER TABLE vault_entries ADD COLUMN group_id TEXT;
+    `,
+  },
 ];
 
 /**

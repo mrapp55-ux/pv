@@ -1,28 +1,41 @@
 import { useCallback, useEffect, useState } from 'react';
-import { listEntries, lockVault, getVaultLocation, setUseGoogleDrive, setVaultFolder, relocateVault, pickVaultFolder, deleteVault, getAutoLockMinutes, setAutoLockMinutes, changeMasterPassword, type VaultLocationInfo } from '../services/tauri-bridge';
+import {
+  listEntries, listGroups, lockVault,
+  getVaultLocation, setUseGoogleDrive, setVaultFolder, relocateVault, pickVaultFolder,
+  deleteVault, getAutoLockMinutes, setAutoLockMinutes, changeMasterPassword,
+  createGroup, renameGroup,
+  type VaultLocationInfo, type Group,
+} from '../services/tauri-bridge';
 import { useVaultStore } from '../store/vault';
 import EntryDetailPanel from './EntryDetailPanel';
 import NewEntryPanel from './NewEntryPanel';
 
 export default function VaultPage({ onAutoLockChange }: { onAutoLockChange: (minutes: number) => void }) {
-  const { entries, setEntries, setAuthState, reset, selectedId, setSelectedId } = useVaultStore();
+  const { entries, setEntries, groups, setGroups, setAuthState, reset, selectedId, setSelectedId, selectedGroupId, setSelectedGroupId } = useVaultStore();
   const [search, setSearch] = useState('');
   const [showNew, setShowNew] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
 
   const refresh = useCallback(async () => {
-    setEntries(await listEntries());
-  }, [setEntries]);
+    const [e, g] = await Promise.all([listEntries(), listGroups()]);
+    setEntries(e);
+    setGroups(g);
+  }, [setEntries, setGroups]);
 
   useEffect(() => { void refresh(); }, []);
 
-  const filtered = search.trim()
-    ? entries.filter(e =>
-        e.title.toLowerCase().includes(search.toLowerCase()) ||
-        (e.username ?? '').toLowerCase().includes(search.toLowerCase()) ||
-        (e.url ?? '').toLowerCase().includes(search.toLowerCase()),
-      )
-    : entries;
+  // Filter entries by selected group then by search term
+  const filtered = entries
+    .filter(e => selectedGroupId === null || e.group_id === selectedGroupId)
+    .filter(e => {
+      if (!search.trim()) return true;
+      const q = search.toLowerCase();
+      return (
+        e.title.toLowerCase().includes(q) ||
+        (e.username ?? '').toLowerCase().includes(q) ||
+        (e.url ?? '').toLowerCase().includes(q)
+      );
+    });
 
   async function handleLock() {
     await lockVault();
@@ -43,31 +56,59 @@ export default function VaultPage({ onAutoLockChange }: { onAutoLockChange: (min
 
   return (
     <div style={s.shell}>
-      {/* ── Sidebar ─────────────────────────────── */}
-      <aside style={s.sidebar}>
-        <div style={s.sidebarHeader}>
-          <span style={s.appName}>🔐 Password Vault</span>
+
+      {/* ── Group panel ─────────────────────────────── */}
+      <aside style={s.groupPanel}>
+        <div style={s.groupHeader}>
+          <span style={s.appName}>PV</span>
           <div style={{ display: 'flex', gap: 4 }}>
             <button className="icon-btn" title="Settings" onClick={() => openPanel('settings')}>⚙</button>
             <button className="icon-btn" title="Lock vault" onClick={handleLock}>🔒</button>
           </div>
         </div>
 
-        <div style={{ padding: '8px 12px 0' }}>
+        <div style={s.groupList}>
           <button
-            className="primary"
-            style={{ width: '100%' }}
-            onClick={() => openPanel('new')}
+            style={{
+              ...s.groupRow,
+              background: selectedGroupId === null ? 'var(--accent-dim)' : 'transparent',
+              borderLeft: selectedGroupId === null ? '2px solid var(--accent)' : '2px solid transparent',
+              fontWeight: selectedGroupId === null ? 700 : 500,
+            }}
+            onClick={() => setSelectedGroupId(null)}
           >
+            All Groups
+          </button>
+          {groups.map(g => (
+            <button
+              key={g.id}
+              style={{
+                ...s.groupRow,
+                background: selectedGroupId === g.id ? 'var(--accent-dim)' : 'transparent',
+                borderLeft: selectedGroupId === g.id ? '2px solid var(--accent)' : '2px solid transparent',
+                fontWeight: selectedGroupId === g.id ? 700 : 500,
+              }}
+              onClick={() => setSelectedGroupId(g.id)}
+            >
+              {g.name}
+            </button>
+          ))}
+        </div>
+      </aside>
+
+      {/* ── Entry list panel ─────────────────────────── */}
+      <aside style={s.entryPanel}>
+        <div style={{ padding: '10px 10px 6px' }}>
+          <button className="primary" style={{ width: '100%' }} onClick={() => openPanel('new')}>
             + New Entry
           </button>
         </div>
 
-        <div style={{ padding: '8px 12px 10px' }}>
+        <div style={{ padding: '0 10px 8px' }}>
           <input
             value={search}
             onChange={e => setSearch(e.target.value)}
-            placeholder="Search…"
+            placeholder={selectedGroupId ? `Search in ${groups.find(g => g.id === selectedGroupId)?.name ?? ''}…` : 'Search all groups…'}
             style={{ fontSize: 13 }}
           />
         </div>
@@ -97,15 +138,16 @@ export default function VaultPage({ onAutoLockChange }: { onAutoLockChange: (min
             </button>
           ))}
         </div>
-
       </aside>
 
-      {/* ── Main panel ──────────────────────────── */}
+      {/* ── Detail / settings panel ──────────────────── */}
       <main style={s.main}>
         {showSettings ? (
-          <SettingsPanel onClose={() => setShowSettings(false)} onAutoLockChange={onAutoLockChange} />
+          <SettingsPanel onClose={() => setShowSettings(false)} onAutoLockChange={onAutoLockChange} groups={groups} onGroupsChanged={refresh} />
         ) : showNew ? (
           <NewEntryPanel
+            groups={groups}
+            defaultGroupId={selectedGroupId}
             onSaved={async (id) => { await refresh(); setSelectedId(id); setShowNew(false); }}
             onCancel={() => setShowNew(false)}
           />
@@ -113,6 +155,7 @@ export default function VaultPage({ onAutoLockChange }: { onAutoLockChange: (min
           <EntryDetailPanel
             key={selectedId}
             id={selectedId}
+            groups={groups}
             onUpdated={refresh}
             onDeleted={handleEntryDeleted}
           />
@@ -147,7 +190,14 @@ function entropyBits(pw: string): number {
   return cs > 0 ? Math.log2(cs) * pw.length : 0;
 }
 
-function SettingsPanel({ onClose, onAutoLockChange }: { onClose: () => void; onAutoLockChange: (m: number) => void }) {
+function SettingsPanel({
+  onClose, onAutoLockChange, groups, onGroupsChanged,
+}: {
+  onClose: () => void;
+  onAutoLockChange: (m: number) => void;
+  groups: Group[];
+  onGroupsChanged: () => Promise<void>;
+}) {
   const { reset, setAuthState } = useVaultStore();
 
   // Storage state
@@ -170,6 +220,13 @@ function SettingsPanel({ onClose, onAutoLockChange }: { onClose: () => void; onA
   const [pwStatus, setPwStatus] = useState('');
   const [pwError, setPwError] = useState('');
 
+  // Groups state
+  const [newGroupName, setNewGroupName] = useState('');
+  const [addingGroup, setAddingGroup] = useState(false);
+  const [groupError, setGroupError] = useState('');
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState('');
+
   useEffect(() => {
     void (async () => {
       const [loc, minutes] = await Promise.all([getVaultLocation(), getAutoLockMinutes()]);
@@ -189,7 +246,6 @@ function SettingsPanel({ onClose, onAutoLockChange }: { onClose: () => void; onA
         if (!location?.google_drive_available) {
           setStorageError('Google Drive not found on this machine.'); return;
         }
-        // Move vault to GDrive folder, then set the flag
         await relocateVault(location!.google_drive_folder!);
         await setUseGoogleDrive(true);
         setStorageStatus('Vault is now on Google Drive — syncs automatically across computers.');
@@ -244,6 +300,49 @@ function SettingsPanel({ onClose, onAutoLockChange }: { onClose: () => void; onA
     }
   }
 
+  // ── Group handlers ────────────────────────────────────────────────────────
+
+  async function handleAddGroup() {
+    const name = newGroupName.trim();
+    if (!name) { setGroupError('Group name is required.'); return; }
+    if (groups.some(g => g.name.toLowerCase() === name.toLowerCase())) {
+      setGroupError('A group with that name already exists.'); return;
+    }
+    setAddingGroup(true); setGroupError('');
+    try {
+      await createGroup(name);
+      setNewGroupName('');
+      await onGroupsChanged();
+    } catch (e) {
+      setGroupError(String(e));
+    } finally {
+      setAddingGroup(false);
+    }
+  }
+
+  async function handleRename(id: string) {
+    const name = renameValue.trim();
+    if (!name) return;
+    if (groups.some(g => g.id !== id && g.name.toLowerCase() === name.toLowerCase())) {
+      setGroupError('A group with that name already exists.'); return;
+    }
+    setGroupError('');
+    try {
+      await renameGroup(id, name);
+      setRenamingId(null);
+      setRenameValue('');
+      await onGroupsChanged();
+    } catch (e) {
+      setGroupError(String(e));
+    }
+  }
+
+  function startRename(g: Group) {
+    setRenamingId(g.id);
+    setRenameValue(g.name);
+    setGroupError('');
+  }
+
   // ── Danger zone ───────────────────────────────────────────────────────────
 
   async function handleDeleteVault() {
@@ -262,6 +361,52 @@ function SettingsPanel({ onClose, onAutoLockChange }: { onClose: () => void; onA
         <h2 style={ss.heading}>Settings</h2>
         <button className="ghost" onClick={onClose}>Close</button>
       </div>
+
+      {/* ── Groups ────────────────────────────────────────────────────── */}
+      <section style={ss.section}>
+        <h3 style={ss.sectionTitle}>Groups</h3>
+        <p style={ss.desc}>Organise your entries into groups. Each entry belongs to one group.</p>
+
+        <div style={{ marginBottom: 12 }}>
+          {groups.map(g => (
+            <div key={g.id} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+              {renamingId === g.id ? (
+                <>
+                  <input
+                    value={renameValue}
+                    onChange={e => setRenameValue(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') void handleRename(g.id); if (e.key === 'Escape') setRenamingId(null); }}
+                    style={{ flex: 1, fontSize: 13 }}
+                    autoFocus
+                  />
+                  <button className="primary" onClick={() => handleRename(g.id)} style={{ padding: '4px 10px', fontSize: 12 }}>Save</button>
+                  <button className="ghost" onClick={() => setRenamingId(null)} style={{ padding: '4px 10px', fontSize: 12 }}>Cancel</button>
+                </>
+              ) : (
+                <>
+                  <span style={{ flex: 1, fontSize: 13 }}>{g.name}</span>
+                  <button className="ghost" onClick={() => startRename(g)} style={{ padding: '3px 10px', fontSize: 12 }}>Rename</button>
+                </>
+              )}
+            </div>
+          ))}
+        </div>
+
+        {groupError && <p style={ss.error}>{groupError}</p>}
+
+        <div style={{ display: 'flex', gap: 8 }}>
+          <input
+            value={newGroupName}
+            onChange={e => setNewGroupName(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') void handleAddGroup(); }}
+            placeholder="New group name…"
+            style={{ flex: 1, fontSize: 13 }}
+          />
+          <button className="primary" onClick={handleAddGroup} disabled={addingGroup || !newGroupName.trim()} style={{ whiteSpace: 'nowrap' }}>
+            {addingGroup ? 'Adding…' : '+ Add Group'}
+          </button>
+        </div>
+      </section>
 
       {/* ── Vault Storage ──────────────────────────────────────────────── */}
       <section style={ss.section}>
@@ -293,7 +438,7 @@ function SettingsPanel({ onClose, onAutoLockChange }: { onClose: () => void; onA
               <input
                 value={customFolder}
                 onChange={e => setCustomFolder(e.target.value)}
-                placeholder="%LOCALAPPDATA%\PasswordVault"
+                placeholder="%LOCALAPPDATA%\PV"
                 style={{ flex: 1, fontSize: 12, fontFamily: 'monospace' }}
               />
               <button className="ghost" onClick={handleBrowse} style={{ whiteSpace: 'nowrap' }}>Browse…</button>
@@ -378,16 +523,22 @@ function SettingsPanel({ onClose, onAutoLockChange }: { onClose: () => void; onA
 
 const s: Record<string, React.CSSProperties> = {
   shell: { display: 'flex', height: '100vh', background: 'var(--bg)' },
-  sidebar: { width: 260, minWidth: 220, borderRight: '1px solid var(--border)', display: 'flex', flexDirection: 'column', background: 'var(--surface)' },
-  sidebarHeader: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 12px 10px', borderBottom: '1px solid var(--border)' },
+  // Left panel: group navigation
+  groupPanel: { width: 160, minWidth: 140, borderRight: '1px solid var(--border)', display: 'flex', flexDirection: 'column', background: 'var(--surface)' },
+  groupHeader: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 10px 10px', borderBottom: '1px solid var(--border)' },
   appName: { fontWeight: 700, fontSize: 15 },
+  groupList: { flex: 1, overflowY: 'auto', padding: '6px 0' },
+  groupRow: { display: 'block', width: '100%', padding: '8px 12px', cursor: 'pointer', border: 'none', textAlign: 'left', fontSize: 13, color: 'var(--text)', background: 'transparent', transition: 'background 0.12s' },
+  // Middle panel: entry list
+  entryPanel: { width: 240, minWidth: 200, borderRight: '1px solid var(--border)', display: 'flex', flexDirection: 'column', background: 'var(--surface)' },
   entryList: { flex: 1, overflowY: 'auto', padding: '6px 0' },
-  entryRow: { display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '9px 12px', cursor: 'pointer', border: 'none', textAlign: 'left', color: 'var(--text)', transition: 'background 0.12s' },
-  entryAvatar: { width: 34, height: 34, borderRadius: 8, background: 'var(--accent)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 13, flexShrink: 0 },
+  entryRow: { display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '9px 10px', cursor: 'pointer', border: 'none', textAlign: 'left', color: 'var(--text)', transition: 'background 0.12s' },
+  entryAvatar: { width: 32, height: 32, borderRadius: 8, background: 'var(--accent)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 12, flexShrink: 0 },
   entryInfo: { minWidth: 0, flex: 1 },
   entryTitle: { fontWeight: 600, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
   entrySub: { fontSize: 11, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
   entryUrl: { fontSize: 10, color: 'var(--accent)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
+  // Right panel: detail / settings
   main: { flex: 1, overflowY: 'auto' },
   placeholder: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%' },
   empty: { textAlign: 'center', color: 'var(--text-muted)', padding: 32, fontSize: 13 },
@@ -404,7 +555,6 @@ const ss: Record<string, React.CSSProperties> = {
   fieldLabel: { fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase' as const, letterSpacing: '0.05em', display: 'block', marginBottom: 4 },
   path: { fontSize: 12, background: 'var(--bg)', padding: '4px 8px', borderRadius: 4, border: '1px solid var(--border)', display: 'block', wordBreak: 'break-all' as const },
   inputLabel: { display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase' as const, letterSpacing: '0.05em', marginBottom: 6 },
-  syncNote: { fontSize: 12, color: 'var(--success)', background: 'rgba(46,204,113,0.1)', border: '1px solid rgba(46,204,113,0.3)', borderRadius: 6, padding: '8px 12px', marginBottom: 8 },
   error: { color: 'var(--danger)', fontSize: 13, marginBottom: 8 },
   success: { color: 'var(--success)', fontSize: 13, marginBottom: 8 },
 };

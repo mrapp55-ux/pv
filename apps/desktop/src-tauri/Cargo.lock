@@ -2422,35 +2422,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "password-vault-desktop"
-version = "0.1.0"
-dependencies = [
- "aes-gcm",
- "argon2",
- "base64 0.22.1",
- "dirs 5.0.1",
- "hex",
- "hkdf",
- "keyring",
- "once_cell",
- "rand 0.8.6",
- "rusqlite",
- "serde",
- "serde_json",
- "sha2",
- "tauri",
- "tauri-build",
- "tauri-plugin-dialog",
- "tauri-plugin-shell",
- "thiserror 1.0.69",
- "tokio",
- "uuid",
- "windows 0.57.0",
- "winreg 0.52.0",
- "zeroize",
-]
-
-[[package]]
 name = "pathdiff"
 version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2678,6 +2649,35 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8fd00f0bb2e90d81d1044c2b32617f68fcb9fa3bb7640c23e9c748e53fb30934"
 dependencies = [
  "unicode-ident",
+]
+
+[[package]]
+name = "pv-desktop"
+version = "0.1.0"
+dependencies = [
+ "aes-gcm",
+ "argon2",
+ "base64 0.22.1",
+ "dirs 5.0.1",
+ "hex",
+ "hkdf",
+ "keyring",
+ "once_cell",
+ "rand 0.8.6",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-dialog",
+ "tauri-plugin-shell",
+ "thiserror 1.0.69",
+ "tokio",
+ "uuid",
+ "windows 0.57.0",
+ "winreg 0.52.0",
+ "zeroize",
 ]
 
 [[package]]

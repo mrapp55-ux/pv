@@ -30,6 +30,10 @@ pub fn run() {
             cmd_update_entry,
             cmd_delete_entry,
             cmd_generate_password,
+            // Groups
+            cmd_list_groups,
+            cmd_create_group,
+            cmd_rename_group,
             // Sync / vault location
             cmd_get_vault_folder,
             cmd_set_vault_folder,

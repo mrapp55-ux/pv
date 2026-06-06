@@ -10,7 +10,9 @@ use crate::state::{AppState, SessionKey};
 use crypto::{derive_key, generate_salt, hkdf_field_key, encrypt_field, decrypt_field};
 use database::{
     delete_entry, get_entry, insert_metadata, init_schema, migrate_schema, list_entries,
-    open_encrypted, create_entry, update_entry, get_salt, EntryDetail, EntryInput, EntryListItem,
+    open_encrypted, create_entry, update_entry, get_salt, ensure_default_group,
+    list_groups, create_group, rename_group,
+    EntryDetail, EntryInput, EntryListItem, Group,
 };
 use biometric::{is_biometric_available, is_key_stored, request_windows_hello, retrieve_key, store_key};
 pub use sync::{
@@ -71,6 +73,7 @@ pub fn cmd_initialize_vault(
     let conn = open_encrypted(&path, &key_hex)?;
     init_schema(&conn)?;
     migrate_schema(&conn)?;
+    ensure_default_group(&conn)?;
 
     let vault_id = uuid::Uuid::new_v4().to_string();
     let did = device_id();
@@ -295,6 +298,78 @@ pub fn cmd_relocate_vault(new_folder: String, state: State<AppState>) -> Result<
     Ok(())
 }
 
+// ─── PWA sidecar ──────────────────────────────────────────────────────────────
+
+#[derive(serde::Serialize)]
+struct SidecarEntry {
+    id: String,
+    title: String,
+    username: Option<String>,
+    password: String,
+    url: Option<String>,
+    notes: Option<String>,
+    security_questions: Option<Vec<database::SecurityQuestion>>,
+    group_id: Option<String>,
+    modified_at: i64,
+}
+
+#[derive(serde::Serialize)]
+struct SidecarPayload {
+    version: u32,
+    groups: Vec<Group>,
+    entries: Vec<SidecarEntry>,
+}
+
+/// Build and write vault.enc alongside vault.db.
+/// Errors are silently ignored — sidecar failure must not block vault mutations.
+fn write_sidecar(conn: &rusqlite::Connection, session: &SessionKey) {
+    let _ = write_sidecar_inner(conn, session);
+}
+
+fn write_sidecar_inner(conn: &rusqlite::Connection, session: &SessionKey) -> Result<()> {
+    let groups = list_groups(conn)?;
+
+    let mut stmt = conn.prepare(
+        "SELECT id, title, username, password_enc, url, notes_enc, security_questions_enc, group_id, modified_at
+         FROM vault_entries WHERE deleted_at IS NULL ORDER BY title COLLATE NOCASE ASC"
+    )?;
+    let entries: Vec<SidecarEntry> = stmt.query_map([], |row| {
+        Ok((
+            row.get::<_, String>(0)?,
+            row.get::<_, String>(1)?,
+            row.get::<_, Option<String>>(2)?,
+            row.get::<_, String>(3)?,
+            row.get::<_, Option<String>>(4)?,
+            row.get::<_, Option<String>>(5)?,
+            row.get::<_, Option<String>>(6)?,
+            row.get::<_, Option<String>>(7)?,
+            row.get::<_, i64>(8)?,
+        ))
+    })?
+    .filter_map(|r| r.ok())
+    .filter_map(|(id, title, username, pw_enc, url, notes_enc, sq_enc, group_id, modified_at)| {
+        let password = decrypt_field(&session.field_password, &pw_enc).ok()?;
+        let notes = notes_enc.as_deref().and_then(|n| decrypt_field(&session.field_notes, n).ok());
+        let security_questions = sq_enc.as_deref().and_then(|sq| {
+            let json = decrypt_field(&session.field_security_questions, sq).ok()?;
+            serde_json::from_str::<Vec<database::SecurityQuestion>>(&json).ok()
+        });
+        Some(SidecarEntry { id, title, username, password, url, notes, security_questions, group_id, modified_at })
+    })
+    .collect();
+
+    let payload = SidecarPayload { version: 1, groups, entries };
+    let json = serde_json::to_string(&payload)
+        .map_err(|e| VaultError::Other(e.to_string()))?;
+
+    let sidecar_key = hkdf_field_key(&session.master, "pwa_sidecar");
+    let encrypted = encrypt_field(&sidecar_key, &json)?;
+
+    let path = sync::vault_path().with_extension("enc");
+    std::fs::write(path, encrypted)?;
+    Ok(())
+}
+
 // ─── Vault CRUD commands ───────────────────────────────────────────────────────
 
 #[tauri::command]
@@ -319,7 +394,9 @@ pub fn cmd_create_entry(entry: EntryInput, state: State<AppState>) -> Result<Str
     let conn = db_guard.as_ref().ok_or(VaultError::Locked)?;
     let sess_guard = state.session.lock().unwrap();
     let session = sess_guard.as_ref().ok_or(VaultError::Locked)?;
-    create_entry(conn, session, entry, &device_id())
+    let id = create_entry(conn, session, entry, &device_id())?;
+    write_sidecar(conn, session);
+    Ok(id)
 }
 
 #[tauri::command]
@@ -328,14 +405,43 @@ pub fn cmd_update_entry(id: String, entry: EntryInput, state: State<AppState>) -
     let conn = db_guard.as_ref().ok_or(VaultError::Locked)?;
     let sess_guard = state.session.lock().unwrap();
     let session = sess_guard.as_ref().ok_or(VaultError::Locked)?;
-    update_entry(conn, session, &id, entry, &device_id())
+    update_entry(conn, session, &id, entry, &device_id())?;
+    write_sidecar(conn, session);
+    Ok(())
 }
 
 #[tauri::command]
 pub fn cmd_delete_entry(id: String, state: State<AppState>) -> Result<()> {
     let db_guard = state.db.lock().unwrap();
     let conn = db_guard.as_ref().ok_or(VaultError::Locked)?;
-    delete_entry(conn, &id, &device_id())
+    let sess_guard = state.session.lock().unwrap();
+    let session = sess_guard.as_ref().ok_or(VaultError::Locked)?;
+    delete_entry(conn, &id, &device_id())?;
+    write_sidecar(conn, session);
+    Ok(())
+}
+
+// ─── Group commands ────────────────────────────────────────────────────────────
+
+#[tauri::command]
+pub fn cmd_list_groups(state: State<AppState>) -> Result<Vec<Group>> {
+    let db_guard = state.db.lock().unwrap();
+    let conn = db_guard.as_ref().ok_or(VaultError::Locked)?;
+    list_groups(conn)
+}
+
+#[tauri::command]
+pub fn cmd_create_group(name: String, state: State<AppState>) -> Result<String> {
+    let db_guard = state.db.lock().unwrap();
+    let conn = db_guard.as_ref().ok_or(VaultError::Locked)?;
+    create_group(conn, &name)
+}
+
+#[tauri::command]
+pub fn cmd_rename_group(id: String, name: String, state: State<AppState>) -> Result<()> {
+    let db_guard = state.db.lock().unwrap();
+    let conn = db_guard.as_ref().ok_or(VaultError::Locked)?;
+    rename_group(conn, &id, &name)
 }
 
 #[tauri::command]

@@ -13,17 +13,24 @@ CREATE TABLE IF NOT EXISTS vault_metadata (
   sync_seq   INTEGER NOT NULL DEFAULT 0
 );
 
+CREATE TABLE IF NOT EXISTS groups (
+  id         TEXT PRIMARY KEY,
+  name       TEXT NOT NULL UNIQUE,
+  created_at INTEGER NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS vault_entries (
-  id           TEXT PRIMARY KEY,
-  title        TEXT NOT NULL,
-  username     TEXT,
-  password_enc TEXT NOT NULL,
-  url          TEXT,
-  notes_enc    TEXT,
-  created_at   INTEGER NOT NULL,
-  modified_at  INTEGER NOT NULL,
-  deleted_at   INTEGER,
-  modified_by  TEXT NOT NULL
+  id                     TEXT PRIMARY KEY,
+  title                  TEXT NOT NULL,
+  username               TEXT,
+  password_enc           TEXT NOT NULL,
+  url                    TEXT,
+  notes_enc              TEXT,
+  group_id               TEXT,
+  created_at             INTEGER NOT NULL,
+  modified_at            INTEGER NOT NULL,
+  deleted_at             INTEGER,
+  modified_by            TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS sync_log (

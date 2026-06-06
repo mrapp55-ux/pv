@@ -1,3 +1,9 @@
+export interface Group {
+  id: string;
+  name: string;
+  createdAt: number;
+}
+
 export interface VaultEntry {
   id: string;
   title: string;
@@ -6,6 +12,7 @@ export interface VaultEntry {
   password: string;
   url: string | null;
   notes: string | null;
+  groupId: string;
   createdAt: number;
   modifiedAt: number;
   deletedAt: number | null;
@@ -21,6 +28,7 @@ export interface VaultEntryEncrypted {
   url: string | null;
   /** AES-256-GCM ciphertext (base64) */
   notesEnc: string | null;
+  groupId: string;
   createdAt: number;
   modifiedAt: number;
   deletedAt: number | null;

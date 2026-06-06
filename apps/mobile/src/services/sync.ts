@@ -2,7 +2,7 @@
  * Google Drive sync service for mobile.
  *
  * Strategy:
- *   - Vault files (vault.db + vault.salt) live in "My Drive/PasswordVault/" on Google Drive.
+ *   - Vault files (vault.db + vault.salt) live in "My Drive/PV/" on Google Drive.
  *   - Desktop computers use the native Google Drive client — no API calls needed there.
  *   - Mobile downloads before unlock (if remote is newer), uploads after every write.
  *   - The vault file is always encrypted; Drive stores only ciphertext (zero-knowledge).
@@ -18,7 +18,7 @@ import * as SecureStore from 'expo-secure-store';
 
 const DRIVE_API = 'https://www.googleapis.com/drive/v3';
 const DRIVE_UPLOAD_API = 'https://www.googleapis.com/upload/drive/v3';
-const FOLDER_NAME = 'PasswordVault';
+const FOLDER_NAME = 'PV';
 const DB_FILE_NAME = 'vault.db';
 const SALT_FILE_NAME = 'vault.salt';
 
@@ -155,7 +155,7 @@ async function getOrCreateFolder(token: string): Promise<string> {
   const cached = await SecureStore.getItemAsync(STORE_FOLDER_ID);
   if (cached) return cached;
 
-  // Search for existing PasswordVault folder
+  // Search for existing PV folder
   const q = encodeURIComponent(
     `name='${FOLDER_NAME}' and mimeType='application/vnd.google-apps.folder' and trashed=false`,
   );

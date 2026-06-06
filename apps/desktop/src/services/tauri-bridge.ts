@@ -12,12 +12,19 @@ export interface SecurityQuestion {
   answer: string;
 }
 
+export interface Group {
+  id: string;
+  name: string;
+  created_at: number;
+}
+
 export interface EntryListItem {
   id: string;
   title: string;
   username: string | null;
   url: string | null;
   modified_at: number;
+  group_id: string | null;
 }
 
 export interface EntryDetail {
@@ -28,6 +35,7 @@ export interface EntryDetail {
   url: string | null;
   notes: string | null;
   security_questions: SecurityQuestion[] | null;
+  group_id: string | null;
   created_at: number;
   modified_at: number;
 }
@@ -39,6 +47,7 @@ export interface EntryInput {
   url: string | null;
   notes: string | null;
   security_questions: SecurityQuestion[] | null;
+  group_id: string | null;
 }
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
@@ -89,6 +98,17 @@ export const updateEntry = (id: string, entry: EntryInput) =>
 
 export const deleteEntry = (id: string) =>
   invoke<void>('cmd_delete_entry', { id });
+
+// ─── Groups ───────────────────────────────────────────────────────────────────
+
+export const listGroups = () =>
+  invoke<Group[]>('cmd_list_groups');
+
+export const createGroup = (name: string) =>
+  invoke<string>('cmd_create_group', { name });
+
+export const renameGroup = (id: string, name: string) =>
+  invoke<void>('cmd_rename_group', { id, name });
 
 // ─── Utilities ────────────────────────────────────────────────────────────────
 
