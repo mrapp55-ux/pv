@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { usePwaStore } from './store';
 import { setAccessToken, downloadVaultFiles } from './services/drive';
 import { keyProvider } from './services/keyDerivation';
@@ -23,14 +23,39 @@ declare global {
   }
 }
 
+const CACHE_SALT = 'pv_salt';
+const CACHE_ENC = 'pv_enc';
+
+function loadCache(): { saltB64: string; encryptedB64: string } | null {
+  const salt = localStorage.getItem(CACHE_SALT);
+  const enc = localStorage.getItem(CACHE_ENC);
+  return salt && enc ? { saltB64: salt, encryptedB64: enc } : null;
+}
+
+function saveCache(saltB64: string, encryptedB64: string) {
+  localStorage.setItem(CACHE_SALT, saltB64);
+  localStorage.setItem(CACHE_ENC, encryptedB64);
+}
+
 export default function App() {
   const { step, setStep, setVault } = usePwaStore();
   const [saltB64, setSaltB64] = useState('');
   const [encryptedB64, setEncryptedB64] = useState('');
   const [error, setError] = useState('');
+  const [hasCachedVault, setHasCachedVault] = useState(false);
 
-  async function handleGoogleSignIn() {
-    setError('');
+  // On first load, skip Google sign-in if we have cached vault files
+  useEffect(() => {
+    const cached = loadCache();
+    if (cached) {
+      setSaltB64(cached.saltB64);
+      setEncryptedB64(cached.encryptedB64);
+      setHasCachedVault(true);
+      setStep('password');
+    }
+  }, []);
+
+  function requestGoogleToken(onSuccess: (token: string) => void) {
     const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined;
     if (!clientId) { setError('VITE_GOOGLE_CLIENT_ID is not configured.'); return; }
     if (!window.google) { setError('Google Sign-In library not loaded yet — please wait and try again.'); return; }
@@ -38,25 +63,48 @@ export default function App() {
     const tokenClient = window.google.accounts.oauth2.initTokenClient({
       client_id: clientId,
       scope: 'https://www.googleapis.com/auth/drive.readonly',
-      callback: async (response) => {
+      callback: (response) => {
         if (!response.access_token) {
           setError('Google sign-in failed or was cancelled.');
           return;
         }
-        setAccessToken(response.access_token);
-        setStep('password');
-        // Pre-fetch vault files while the user types their password
-        try {
-          const files = await downloadVaultFiles();
-          setSaltB64(files.saltB64);
-          setEncryptedB64(files.encryptedB64);
-        } catch (e) {
-          setError(String(e));
-          setStep('google');
-        }
+        onSuccess(response.access_token);
       },
     });
     tokenClient.requestAccessToken();
+  }
+
+  async function handleGoogleSignIn() {
+    setError('');
+    requestGoogleToken(async (token) => {
+      setAccessToken(token);
+      setStep('password');
+      try {
+        const files = await downloadVaultFiles();
+        setSaltB64(files.saltB64);
+        setEncryptedB64(files.encryptedB64);
+        saveCache(files.saltB64, files.encryptedB64);
+        setHasCachedVault(true);
+      } catch (e) {
+        setError(String(e));
+        setStep('google');
+      }
+    });
+  }
+
+  async function handleSync() {
+    setError('');
+    requestGoogleToken(async (token) => {
+      setAccessToken(token);
+      try {
+        const files = await downloadVaultFiles();
+        setSaltB64(files.saltB64);
+        setEncryptedB64(files.encryptedB64);
+        saveCache(files.saltB64, files.encryptedB64);
+      } catch (e) {
+        setError(String(e));
+      }
+    });
   }
 
   async function handleUnlock(password: string) {
@@ -79,7 +127,9 @@ export default function App() {
     <UnlockPage
       step={step}
       error={error}
+      hasCachedVault={hasCachedVault}
       onGoogleSignIn={handleGoogleSignIn}
+      onSync={handleSync}
       onUnlock={handleUnlock}
     />
   );

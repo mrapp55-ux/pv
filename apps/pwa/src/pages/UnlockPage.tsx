@@ -2,11 +2,13 @@ import { useState } from 'react';
 import type { AppStep } from '../store';
 
 export default function UnlockPage({
-  step, error, onGoogleSignIn, onUnlock,
+  step, error, hasCachedVault, onGoogleSignIn, onSync, onUnlock,
 }: {
   step: Exclude<AppStep, 'unlocked'>;
   error: string;
+  hasCachedVault: boolean;
   onGoogleSignIn: () => void;
+  onSync: () => void;
   onUnlock: (password: string) => void;
 }) {
   const [password, setPassword] = useState('');
@@ -56,6 +58,11 @@ export default function UnlockPage({
             >
               {busy ? 'Unlocking…' : 'Unlock'}
             </button>
+            {hasCachedVault && !busy && (
+              <button style={s.syncBtn} onClick={onSync}>
+                Sync from Drive
+              </button>
+            )}
           </>
         )}
       </div>
@@ -138,6 +145,16 @@ const s: Record<string, React.CSSProperties> = {
     fontWeight: 600,
     padding: '13px 16px',
     cursor: 'pointer',
+  },
+  syncBtn: {
+    width: '100%',
+    background: 'transparent',
+    border: 'none',
+    color: '#6666aa',
+    fontSize: 13,
+    marginTop: 12,
+    cursor: 'pointer',
+    textDecoration: 'underline',
   },
   primaryBtn: {
     width: '100%',
