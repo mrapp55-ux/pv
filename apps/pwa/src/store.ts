@@ -22,5 +22,8 @@ export const usePwaStore = create<PwaStore>((set) => ({
   setStep: (step) => set({ step }),
   setVault: (entries, groups) => set({ entries, groups }),
   setSelectedGroupId: (selectedGroupId) => set({ selectedGroupId }),
-  lock: () => set({ step: 'google', entries: [], groups: [], selectedGroupId: null }),
+  lock: () => {
+    const hasCached = !!(localStorage.getItem('pv_salt') && localStorage.getItem('pv_enc'));
+    set({ step: hasCached ? 'password' : 'google', entries: [], groups: [], selectedGroupId: null });
+  },
 }));
