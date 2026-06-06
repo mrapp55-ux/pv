@@ -3,7 +3,7 @@ name: Deploy PWA to GitHub Pages
 on:
   push:
     branches: [master]
-    paths: ['apps/pwa/**', 'packages/shared-types/**']
+    paths: ['apps/pwa/**', 'packages/shared-types/**', '.github/workflows/deploy-pwa.yml']
 
 permissions:
   contents: read
