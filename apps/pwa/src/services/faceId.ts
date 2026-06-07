@@ -61,7 +61,7 @@ export async function unlockWithFaceId(): Promise<Uint8Array> {
   if (!credentialId || !wrappedKey) throw new Error('Face ID not set up');
 
   const challenge = crypto.getRandomValues(new Uint8Array(32));
-  const rawId     = fromBase64(credentialId);
+  const rawId     = fromBase64(credentialId).slice();
 
   const assertion = await navigator.credentials.get({
     publicKey: {
@@ -85,15 +85,15 @@ export async function unlockWithFaceId(): Promise<Uint8Array> {
 // ── AES-KW helpers ────────────────────────────────────────────────────────────
 
 async function wrapKey(prfOutput: Uint8Array, masterKey: Uint8Array): Promise<string> {
-  const wrapping = await crypto.subtle.importKey('raw', prfOutput, 'AES-KW', false, ['wrapKey']);
-  const key      = await crypto.subtle.importKey('raw', masterKey, 'AES-GCM', true, ['encrypt']);
+  const wrapping = await crypto.subtle.importKey('raw', prfOutput.slice(), 'AES-KW', false, ['wrapKey']);
+  const key      = await crypto.subtle.importKey('raw', masterKey.slice(), 'AES-GCM', true, ['encrypt']);
   const wrapped  = await crypto.subtle.wrapKey('raw', key, wrapping, 'AES-KW');
   return toBase64(new Uint8Array(wrapped));
 }
 
 async function unwrapKey(prfOutput: Uint8Array, wrappedB64: string): Promise<Uint8Array> {
-  const wrapped  = fromBase64(wrappedB64);
-  const wrapping = await crypto.subtle.importKey('raw', prfOutput, 'AES-KW', false, ['unwrapKey']);
+  const wrapped  = fromBase64(wrappedB64).slice();
+  const wrapping = await crypto.subtle.importKey('raw', prfOutput.slice(), 'AES-KW', false, ['unwrapKey']);
   const key      = await crypto.subtle.unwrapKey('raw', wrapped, wrapping, 'AES-KW', 'AES-GCM', true, ['encrypt']);
   return new Uint8Array(await crypto.subtle.exportKey('raw', key));
 }
