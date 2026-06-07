@@ -22,7 +22,15 @@ export default function VaultPage({ onAutoLockChange }: { onAutoLockChange: (min
     setGroups(g);
   }, [setEntries, setGroups]);
 
-  useEffect(() => { void refresh(); }, []);
+  useEffect(() => {
+    void (async () => {
+      const [e, g] = await Promise.all([listEntries(), listGroups()]);
+      setEntries(e);
+      setGroups(g);
+      const muki = g.find(gr => gr.name === 'Muki');
+      if (muki) setSelectedGroupId(muki.id);
+    })();
+  }, []);
 
   // Filter entries by selected group then by search term
   const filtered = entries

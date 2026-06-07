@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { usePwaStore } from '../store';
 import { clearAccessToken } from '../services/drive';
 import type { SidecarEntry } from '../types';
@@ -11,6 +11,13 @@ export default function VaultPage({ onLock }: {
   const { entries, groups, selectedGroupId, setSelectedGroupId, lock } = usePwaStore();
   const [search, setSearch] = useState('');
   const [selectedEntry, setSelectedEntry] = useState<SidecarEntry | null>(null);
+
+  useEffect(() => {
+    if (selectedGroupId === null) {
+      const muki = groups.find(g => g.name === 'Muki');
+      if (muki) setSelectedGroupId(muki.id);
+    }
+  }, [groups]);
 
   const filtered = entries
     .filter(e => !selectedGroupId || e.group_id === selectedGroupId)
