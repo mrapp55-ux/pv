@@ -113,12 +113,22 @@ export default function VaultPage({ onAutoLockChange }: { onAutoLockChange: (min
         </div>
 
         <div style={{ padding: '0 10px 8px' }}>
-          <input
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder={selectedGroupId ? `Search in ${groups.find(g => g.id === selectedGroupId)?.name ?? ''}…` : 'Search all groups…'}
-            style={{ fontSize: 13 }}
-          />
+          <div style={{ position: 'relative' }}>
+            <input
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder={selectedGroupId ? `Search in ${groups.find(g => g.id === selectedGroupId)?.name ?? ''}…` : 'Search all groups…'}
+              style={{ fontSize: 13, paddingRight: search ? 28 : undefined, width: '100%', boxSizing: 'border-box' }}
+            />
+            {search && (
+              <button
+                onClick={() => setSearch('')}
+                style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: 13, cursor: 'pointer', padding: '2px 4px', lineHeight: 1 }}
+              >
+                ✕
+              </button>
+            )}
+          </div>
         </div>
 
         <div style={s.entryList}>
