@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { usePwaStore } from './store';
 import { setAccessToken, downloadVaultFiles } from './services/drive';
 import { keyProvider } from './services/keyDerivation';
 import { decryptSidecar } from './services/crypto';
+import { isFaceIdSetUp, setupFaceId, unlockWithFaceId } from './services/faceId';
 import UnlockPage from './pages/UnlockPage';
 import VaultPage from './pages/VaultPage';
 
@@ -38,7 +39,6 @@ function saveCache(saltB64: string, encryptedB64: string) {
   localStorage.setItem(CACHE_ENC,  encryptedB64);
 }
 
-/** Wait for the GIS library to load (injected async via <script> in index.html). */
 function waitForGoogle(timeoutMs = 4000): Promise<boolean> {
   return new Promise((resolve) => {
     if (window.google) { resolve(true); return; }
@@ -52,10 +52,12 @@ function waitForGoogle(timeoutMs = 4000): Promise<boolean> {
 
 export default function App() {
   const { step, setStep, setVault } = usePwaStore();
-  const [saltB64,      setSaltB64]      = useState('');
-  const [encryptedB64, setEncryptedB64] = useState('');
-  const [error,        setError]        = useState('');
+  const [saltB64,        setSaltB64]        = useState('');
+  const [encryptedB64,   setEncryptedB64]   = useState('');
+  const [error,          setError]          = useState('');
   const [hasCachedVault, setHasCachedVault] = useState(false);
+  const [hasFaceId,      setHasFaceId]      = useState(false);
+  const masterKeyRef = useRef<Uint8Array | null>(null); // cleared on lock
 
   useEffect(() => {
     const cached = loadCache();
@@ -63,17 +65,18 @@ export default function App() {
       setSaltB64(cached.saltB64);
       setEncryptedB64(cached.encryptedB64);
       setHasCachedVault(true);
+      setHasFaceId(isFaceIdSetUp());
       setStep('password');
-      // Attempt silent background sync — no popup, fails gracefully
       silentSync(cached, setSaltB64, setEncryptedB64);
     }
   }, []);
+
+  // ── Google helpers ────────────────────────────────────────────────────────
 
   function requestGoogleToken(onSuccess: (token: string) => void) {
     const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined;
     if (!clientId)      { setError('VITE_GOOGLE_CLIENT_ID is not configured.'); return; }
     if (!window.google) { setError('Google Sign-In library not loaded yet — please wait and try again.'); return; }
-
     window.google.accounts.oauth2.initTokenClient({
       client_id: clientId,
       scope: 'https://www.googleapis.com/auth/drive.readonly',
@@ -117,39 +120,82 @@ export default function App() {
     });
   }
 
+  // ── Unlock helpers ────────────────────────────────────────────────────────
+
+  async function openVault(masterKey: Uint8Array) {
+    const payload = await decryptSidecar(masterKey, encryptedB64);
+    masterKeyRef.current = masterKey;
+    setVault(payload.entries, payload.groups);
+    setStep('unlocked');
+  }
+
   async function handleUnlock(password: string) {
     setError('');
     setStep('unlocking');
     try {
       const masterKey = await keyProvider.deriveKey(password, saltB64);
-      const payload   = await decryptSidecar(masterKey, encryptedB64);
-      setVault(payload.entries, payload.groups);
-      setStep('unlocked');
+      await openVault(masterKey);
     } catch {
       setError('Wrong password, or the vault file is corrupt.');
       setStep('password');
     }
   }
 
-  if (step === 'unlocked') return <VaultPage />;
+  async function handleFaceIdUnlock() {
+    setError('');
+    setStep('unlocking');
+    try {
+      const masterKey = await unlockWithFaceId();
+      await openVault(masterKey);
+    } catch (e) {
+      setError('Face ID failed — enter your master password.');
+      setStep('password');
+    }
+  }
+
+  // ── Face ID setup (called from VaultPage after password unlock) ───────────
+
+  async function handleSetupFaceId() {
+    if (!masterKeyRef.current) return;
+    try {
+      await setupFaceId(masterKeyRef.current);
+      setHasFaceId(true);
+    } catch (e) {
+      // bubble the error up as an alert — VaultPage will handle it
+      throw e;
+    }
+  }
+
+  function handleLockAndClearKey() {
+    masterKeyRef.current = null;
+  }
+
+  // ── Render ────────────────────────────────────────────────────────────────
+
+  if (step === 'unlocked') {
+    return (
+      <VaultPage
+        hasFaceId={hasFaceId}
+        onSetupFaceId={handleSetupFaceId}
+        onLock={handleLockAndClearKey}
+      />
+    );
+  }
 
   return (
     <UnlockPage
       step={step}
       error={error}
       hasCachedVault={hasCachedVault}
+      hasFaceId={hasFaceId}
       onGoogleSignIn={handleGoogleSignIn}
       onSync={handleSync}
       onUnlock={handleUnlock}
+      onFaceIdUnlock={handleFaceIdUnlock}
     />
   );
 }
 
-/**
- * Try to silently refresh vault files from Drive without any user interaction.
- * Uses prompt:'none' — if Google has no active session or the token request
- * requires UI, error_callback fires and we silently fall back to cached files.
- */
 async function silentSync(
   cached: { saltB64: string; encryptedB64: string },
   setSaltB64: (s: string) => void,
@@ -173,13 +219,11 @@ async function silentSync(
             setSaltB64(files.saltB64);
             setEncryptedB64(files.encryptedB64);
             saveCache(files.saltB64, files.encryptedB64);
-          } catch {
-            // Drive unavailable — cached files remain in state
-          }
+          } catch { /* cached files remain */ }
         }
         resolve();
       },
-      error_callback: () => resolve(), // needs interaction — silently skip
+      error_callback: () => resolve(),
     }).requestAccessToken();
   });
 }
