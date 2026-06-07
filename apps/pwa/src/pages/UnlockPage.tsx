@@ -2,16 +2,14 @@ import { useState } from 'react';
 import type { AppStep } from '../store';
 
 export default function UnlockPage({
-  step, error, hasCachedVault, hasFaceId, onGoogleSignIn, onSync, onUnlock, onFaceIdUnlock,
+  step, error, hasCachedVault, onGoogleSignIn, onSync, onUnlock,
 }: {
   step: Exclude<AppStep, 'unlocked'>;
   error: string;
   hasCachedVault: boolean;
-  hasFaceId: boolean;
   onGoogleSignIn: () => void;
   onSync: () => void;
   onUnlock: (password: string) => void;
-  onFaceIdUnlock: () => void;
 }) {
   const [password, setPassword] = useState('');
   const [showPw, setShowPw] = useState(false);
@@ -36,21 +34,6 @@ export default function UnlockPage({
 
         {(step === 'password' || step === 'unlocking') && (
           <>
-            {hasFaceId && (
-              <button style={s.faceIdBtn} onClick={onFaceIdUnlock} disabled={busy}>
-                <span style={{ fontSize: 32, display: 'block', marginBottom: 6 }}>􀎽</span>
-                Use Face ID
-              </button>
-            )}
-
-            {hasFaceId && (
-              <div style={s.divider}>
-                <div style={s.dividerLine} />
-                <span style={s.dividerText}>or</span>
-                <div style={s.dividerLine} />
-              </div>
-            )}
-
             <p style={s.hint}>Enter your master password</p>
             <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
               <input
@@ -61,7 +44,7 @@ export default function UnlockPage({
                 placeholder="Master password"
                 style={s.input}
                 disabled={busy}
-                autoFocus={!hasFaceId}
+                autoFocus
                 autoComplete="current-password"
               />
               <button style={s.iconBtn} onClick={() => setShowPw(v => !v)} tabIndex={-1}>
@@ -128,22 +111,6 @@ const s: Record<string, React.CSSProperties> = {
     marginBottom: 20,
     lineHeight: 1.5,
   },
-  faceIdBtn: {
-    width: '100%',
-    background: '#1e2a4a',
-    border: '1px solid #3a4a7a',
-    borderRadius: 16,
-    color: '#fff',
-    fontSize: 15,
-    fontWeight: 600,
-    padding: '16px',
-    cursor: 'pointer',
-    marginBottom: 8,
-    textAlign: 'center' as const,
-  },
-  divider: { display: 'flex', alignItems: 'center', gap: 10, margin: '16px 0' },
-  dividerLine: { flex: 1, height: 1, background: '#2a2a4a' },
-  dividerText: { color: '#6666aa', fontSize: 12 },
   hint: { color: '#8888aa', fontSize: 13, textAlign: 'center', marginBottom: 14 },
   input: {
     flex: 1,

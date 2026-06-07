@@ -1,9 +1,8 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { usePwaStore } from './store';
 import { setAccessToken, downloadVaultFiles } from './services/drive';
 import { keyProvider } from './services/keyDerivation';
 import { decryptSidecar } from './services/crypto';
-import { isFaceIdSetUp, setupFaceId, unlockWithFaceId } from './services/faceId';
 import UnlockPage from './pages/UnlockPage';
 import VaultPage from './pages/VaultPage';
 
@@ -56,8 +55,6 @@ export default function App() {
   const [encryptedB64,   setEncryptedB64]   = useState('');
   const [error,          setError]          = useState('');
   const [hasCachedVault, setHasCachedVault] = useState(false);
-  const [hasFaceId,      setHasFaceId]      = useState(false);
-  const masterKeyRef = useRef<Uint8Array | null>(null); // cleared on lock
 
   useEffect(() => {
     const cached = loadCache();
@@ -65,7 +62,6 @@ export default function App() {
       setSaltB64(cached.saltB64);
       setEncryptedB64(cached.encryptedB64);
       setHasCachedVault(true);
-      setHasFaceId(isFaceIdSetUp());
       setStep('password');
       silentSync(cached, setSaltB64, setEncryptedB64);
     }
@@ -122,64 +118,24 @@ export default function App() {
 
   // ── Unlock helpers ────────────────────────────────────────────────────────
 
-  async function openVault(masterKey: Uint8Array) {
-    const payload = await decryptSidecar(masterKey, encryptedB64);
-    masterKeyRef.current = masterKey;
-    setVault(payload.entries, payload.groups);
-    setStep('unlocked');
-  }
-
   async function handleUnlock(password: string) {
     setError('');
     setStep('unlocking');
     try {
       const masterKey = await keyProvider.deriveKey(password, saltB64);
-      await openVault(masterKey);
+      const payload = await decryptSidecar(masterKey, encryptedB64);
+      setVault(payload.entries, payload.groups);
+      setStep('unlocked');
     } catch {
       setError('Wrong password, or the vault file is corrupt.');
       setStep('password');
     }
   }
 
-  async function handleFaceIdUnlock() {
-    setError('');
-    setStep('unlocking');
-    try {
-      const masterKey = await unlockWithFaceId();
-      await openVault(masterKey);
-    } catch (e) {
-      setError('Face ID failed — enter your master password.');
-      setStep('password');
-    }
-  }
-
-  // ── Face ID setup (called from VaultPage after password unlock) ───────────
-
-  async function handleSetupFaceId() {
-    if (!masterKeyRef.current) return;
-    try {
-      await setupFaceId(masterKeyRef.current);
-      setHasFaceId(true);
-    } catch (e) {
-      // bubble the error up as an alert — VaultPage will handle it
-      throw e;
-    }
-  }
-
-  function handleLockAndClearKey() {
-    masterKeyRef.current = null;
-  }
-
   // ── Render ────────────────────────────────────────────────────────────────
 
   if (step === 'unlocked') {
-    return (
-      <VaultPage
-        hasFaceId={hasFaceId}
-        onSetupFaceId={handleSetupFaceId}
-        onLock={handleLockAndClearKey}
-      />
-    );
+    return <VaultPage onLock={() => {}} />;
   }
 
   return (
@@ -187,11 +143,9 @@ export default function App() {
       step={step}
       error={error}
       hasCachedVault={hasCachedVault}
-      hasFaceId={hasFaceId}
       onGoogleSignIn={handleGoogleSignIn}
       onSync={handleSync}
       onUnlock={handleUnlock}
-      onFaceIdUnlock={handleFaceIdUnlock}
     />
   );
 }

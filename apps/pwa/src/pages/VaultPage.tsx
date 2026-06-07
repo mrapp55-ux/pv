@@ -5,15 +5,12 @@ import type { SidecarEntry } from '../types';
 
 const CLIPBOARD_CLEAR_MS = 30_000;
 
-export default function VaultPage({ hasFaceId, onSetupFaceId, onLock }: {
-  hasFaceId: boolean;
-  onSetupFaceId: () => Promise<void>;
+export default function VaultPage({ onLock }: {
   onLock: () => void;
 }) {
   const { entries, groups, selectedGroupId, setSelectedGroupId, lock } = usePwaStore();
   const [search, setSearch] = useState('');
   const [selectedEntry, setSelectedEntry] = useState<SidecarEntry | null>(null);
-  const [faceIdMsg, setFaceIdMsg] = useState('');
 
   const filtered = entries
     .filter(e => !selectedGroupId || e.group_id === selectedGroupId)
@@ -33,16 +30,6 @@ export default function VaultPage({ hasFaceId, onSetupFaceId, onLock }: {
     lock();
   }
 
-  async function handleSetupFaceId() {
-    setFaceIdMsg('');
-    try {
-      await onSetupFaceId();
-      setFaceIdMsg('Face ID enabled successfully!');
-    } catch (e) {
-      setFaceIdMsg(String(e));
-    }
-  }
-
   if (selectedEntry) {
     return (
       <EntryDetail
@@ -58,19 +45,8 @@ export default function VaultPage({ hasFaceId, onSetupFaceId, onLock }: {
     <div style={s.shell}>
       <div style={s.header}>
         <span style={s.appName}>🔐 PV</span>
-        {!hasFaceId && (
-          <button style={s.faceIdSetupBtn} onClick={handleSetupFaceId} title="Enable Face ID">
-            Enable Face ID
-          </button>
-        )}
         <button style={s.lockBtn} onClick={handleLock} title="Lock vault">🔒</button>
       </div>
-
-      {faceIdMsg && (
-        <div style={{ padding: '8px 16px', fontSize: 13, color: faceIdMsg.startsWith('Face ID enabled') ? '#2ecc71' : '#e74c3c', textAlign: 'center' }}>
-          {faceIdMsg}
-        </div>
-      )}
 
       <div style={s.controls}>
         {groups.length > 1 && (
@@ -242,7 +218,6 @@ const s: Record<string, React.CSSProperties> = {
   },
   appName: { fontSize: 18, fontWeight: 700 },
   lockBtn: { background: 'none', border: 'none', fontSize: 22, cursor: 'pointer' },
-  faceIdSetupBtn: { background: 'none', border: '1px solid #3a3a6a', borderRadius: 8, color: '#8888cc', fontSize: 12, padding: '4px 10px', cursor: 'pointer' },
   controls: { padding: '0 12px 10px', display: 'flex', flexDirection: 'column', gap: 8 },
   groupSelect: {
     background: '#1a1a2e', border: '1px solid #2a2a4a', borderRadius: 12,
