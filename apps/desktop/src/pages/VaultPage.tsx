@@ -227,11 +227,6 @@ function SettingsPanel({
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
 
-  // Import state
-  const [importing, setImporting] = useState(false);
-  const [importDone, setImportDone] = useState(false);
-  const [importProgress, setImportProgress] = useState(0);
-  const [importError, setImportError] = useState('');
 
   useEffect(() => {
     void (async () => {
@@ -351,23 +346,56 @@ function SettingsPanel({
 
   // ── Import handler ────────────────────────────────────────────────────────
 
-  async function handleImport() {
-    setImporting(true); setImportError(''); setImportProgress(0);
+  const [importing, setImporting] = useState(false);
+  const [importProgress, setImportProgress] = useState(0);
+  const [importTotal, setImportTotal] = useState(0);
+  const [importStatus, setImportStatus] = useState('');
+  const [importError, setImportError] = useState('');
+
+  async function handleImportFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = '';
+    setImportError(''); setImportStatus(''); setImportProgress(0);
+    setImporting(true);
     try {
-      const mod = await import(/* @vite-ignore */ '../import-data');
-      const entries: Array<{ title: string; username: string | null; password: string; url: string | null; notes: string | null }> = mod.IMPORT_ENTRIES as never;
+      const text = await file.text();
+      const rows: Array<{ title: string; username?: string | null; password: string; url?: string | null; notes?: string | null; group?: string | null }> = JSON.parse(text);
+      if (!Array.isArray(rows)) throw new Error('JSON must be an array of entries.');
+      setImportTotal(rows.length);
 
-      let mukiId = groups.find(g => g.name === 'Muki')?.id;
-      if (!mukiId) mukiId = await createGroup('Muki');
+      // Collect unique group names and resolve/create group IDs
+      const groupCache = new Map<string, string>();
+      for (const g of groups) groupCache.set(g.name, g.id);
 
-      for (let i = 0; i < entries.length; i++) {
-        await createEntry({ ...entries[i], security_questions: null, group_id: mukiId });
+      async function resolveGroup(name: string | null | undefined): Promise<string | null> {
+        if (!name) return null;
+        if (groupCache.has(name)) return groupCache.get(name)!;
+        const id = await createGroup(name);
+        groupCache.set(name, id);
+        return id;
+      }
+
+      for (let i = 0; i < rows.length; i++) {
+        const r = rows[i];
+        if (!r.title || !r.password) throw new Error(`Row ${i + 1} is missing title or password.`);
+        const groupId = await resolveGroup(r.group);
+        await createEntry({
+          title: r.title,
+          username: r.username ?? null,
+          password: r.password,
+          url: r.url ?? null,
+          notes: r.notes ?? null,
+          security_questions: null,
+          group_id: groupId,
+        });
         setImportProgress(i + 1);
       }
+
       await onGroupsChanged();
-      setImportDone(true);
+      setImportStatus(`✓ ${rows.length} entries imported successfully.`);
     } catch (e) {
-      setImportError(String(e).includes('import-data') ? 'import-data.ts not found — create the file first.' : String(e));
+      setImportError(String(e));
     } finally {
       setImporting(false);
     }
@@ -539,21 +567,20 @@ function SettingsPanel({
         </button>
       </section>
 
-      {/* ── One-time Import ───────────────────────────────────────────── */}
+      {/* ── Import ────────────────────────────────────────────────────── */}
       <section style={ss.section}>
         <h3 style={ss.sectionTitle}>Import Entries</h3>
-        {importDone ? (
-          <p style={ss.success}>✓ All entries imported into the "Muki" group. You can now delete import-data.ts.</p>
-        ) : (
-          <>
-            <p style={ss.desc}>Imports entries from the local import-data.ts file into the "Muki" group (creates it if needed). Run once, then delete the file.</p>
-            {importError && <p style={ss.error}>{importError}</p>}
-            {importing && <p style={ss.desc}>Importing… {importProgress} entries done</p>}
-            <button className="primary" onClick={handleImport} disabled={importing}>
-              {importing ? `Importing… (${importProgress})` : 'Import 32 entries into "Muki" group'}
-            </button>
-          </>
-        )}
+        <p style={ss.desc}>
+          Import from a JSON file. Each entry: <code style={{ fontSize: 11 }}>{'{"title","username","password","url","notes","group"}'}</code>.
+          The <code style={{ fontSize: 11 }}>group</code> field is optional and will be created if it doesn't exist.
+        </p>
+        {importError && <p style={ss.error}>{importError}</p>}
+        {importStatus && <p style={ss.success}>{importStatus}</p>}
+        {importing && <p style={ss.desc}>Importing… {importProgress} / {importTotal}</p>}
+        <label className="primary" style={{ display: 'inline-block', padding: '7px 16px', borderRadius: 6, cursor: 'pointer', fontSize: 13, fontWeight: 600, opacity: importing ? 0.55 : 1, pointerEvents: importing ? 'none' : 'auto' }}>
+          {importing ? 'Importing…' : 'Choose JSON file…'}
+          <input type="file" accept=".json" style={{ display: 'none' }} onChange={handleImportFile} disabled={importing} />
+        </label>
       </section>
 
       {/* ── Danger Zone ───────────────────────────────────────────────── */}
