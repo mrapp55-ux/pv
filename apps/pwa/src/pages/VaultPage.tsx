@@ -142,27 +142,34 @@ function EntryDetail({ entry, groupName, showGroup, onBack }: {
           <div style={s.fieldBlock}>
             <span style={s.fieldLabel}>Security Questions</span>
             {entry.security_questions.map((sq, i) => (
-              <div key={i} style={{ marginTop: 10 }}>
-                <div style={{ fontSize: 12, color: '#8888aa', marginBottom: 4 }}>
-                  <strong>Q{i + 1}</strong> {sq.question}
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ flex: 1, fontSize: 14, color: '#fff', fontFamily: 'monospace' }}>
-                    {'•'.repeat(Math.min(sq.answer.length, 16))}
-                  </span>
-                  <button
-                    style={{ ...s.iconAction, color: copied === `SQ${i+1}` ? '#2ecc71' : '#8888aa' }}
-                    onClick={() => copy(sq.answer, `SQ${i+1}`)}
-                  >
-                    {copied === `SQ${i+1}` ? '✓' : '⎘'}
-                  </button>
-                </div>
-              </div>
+              <SQRow key={i} index={i} sq={sq} copied={copied} onCopy={() => copy(sq.answer, `SQ${i + 1}`)} label={`SQ${i + 1}`} />
             ))}
           </div>
         )}
 
         <p style={s.meta}>Modified {new Date(entry.modified_at).toLocaleString()}</p>
+      </div>
+    </div>
+  );
+}
+
+function SQRow({ index, sq, copied, onCopy, label }: {
+  index: number; sq: { question: string; answer: string }; copied: string | null; onCopy: () => void; label: string;
+}) {
+  const [show, setShow] = useState(true);
+  return (
+    <div style={{ marginTop: index === 0 ? 8 : 4 }}>
+      <div style={{ fontSize: 12, color: '#8888aa', marginBottom: 4 }}>
+        <strong>Q{index + 1}</strong> {sq.question}
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span style={{ flex: 1, fontSize: 14, color: '#fff', fontFamily: 'monospace' }}>
+          {show ? sq.answer : '•'.repeat(Math.min(sq.answer.length, 16))}
+        </span>
+        <button style={s.iconAction} onClick={() => setShow(v => !v)}>{show ? '👁' : '🙈'}</button>
+        <button style={{ ...s.iconAction, color: copied === label ? '#2ecc71' : '#8888aa' }} onClick={onCopy}>
+          {copied === label ? '✓' : '⎘'}
+        </button>
       </div>
     </div>
   );

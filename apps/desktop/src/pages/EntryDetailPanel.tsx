@@ -200,7 +200,7 @@ function SecurityQuestionRow({ index, question, answer, copyField, copied }: {
   copyField: (v: string, field: string) => void;
   copied: string | null;
 }) {
-  const [showAnswer, setShowAnswer] = useState(false);
+  const [showAnswer, setShowAnswer] = useState(true);
   const field = `SQ${index + 1}`;
   return (
     <div style={{ marginTop: index === 0 ? 8 : 0, marginBottom: 10 }}>
@@ -212,7 +212,7 @@ function SecurityQuestionRow({ index, question, answer, copyField, copied }: {
           {showAnswer ? answer : '•'.repeat(Math.min(answer.length, 20))}
         </span>
         <button className="icon-btn" onClick={() => setShowAnswer(v => !v)}>
-          {showAnswer ? '🙈' : '👁'}
+          {showAnswer ? '👁' : '🙈'}
         </button>
         <button
           className="icon-btn"
