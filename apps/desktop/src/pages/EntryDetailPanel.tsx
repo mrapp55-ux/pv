@@ -162,7 +162,7 @@ export default function EntryDetailPanel({
         value={showPw ? entry.password : '•'.repeat(Math.min(entry.password.length, 20))}
         onCopy={() => copyField(entry.password, 'Password')}
         copied={copied === 'Password'}
-        extra={<button className="icon-btn" onClick={() => setShowPw(v => !v)}>{showPw ? '🙈' : '👁'}</button>}
+        extra={<button className="icon-btn" onClick={() => setShowPw(v => !v)}>{showPw ? '👁' : '🙈'}</button>}
       />
       <Row label="URL" value={entry.url ?? '—'} onCopy={entry.url ? () => copyField(entry.url!, 'URL') : undefined} copied={copied === 'URL'} />
       <div style={s.fieldBlock}>
