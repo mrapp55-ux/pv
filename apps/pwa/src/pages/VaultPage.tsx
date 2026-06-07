@@ -192,7 +192,7 @@ function CopyField({ label, value, copied, onCopy }: {
 function PasswordField({ password, copied, onCopy }: {
   password: string; copied: boolean; onCopy: () => void;
 }) {
-  const [show, setShow] = useState(false);
+  const [show, setShow] = useState(true);
   return (
     <div style={s.fieldBlock}>
       <span style={s.fieldLabel}>Password</span>
