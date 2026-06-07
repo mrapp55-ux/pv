@@ -108,6 +108,7 @@ function EntryDetail({ entry, groupName, showGroup, onBack }: {
   onBack: () => void;
 }) {
   const [copied, setCopied] = useState<string | null>(null);
+  const [showSQ, setShowSQ] = useState(false);
   const clipTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   function copy(value: string, label: string) {
@@ -152,8 +153,14 @@ function EntryDetail({ entry, groupName, showGroup, onBack }: {
 
         {entry.security_questions && entry.security_questions.length > 0 && (
           <div style={s.fieldBlock}>
-            <span style={s.fieldLabel}>Security Questions</span>
-            {entry.security_questions.map((sq, i) => (
+            <button
+              onClick={() => setShowSQ(v => !v)}
+              style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
+            >
+              <span style={s.fieldLabel}>Security Questions ({entry.security_questions.length})</span>
+              <span style={{ fontSize: 13, color: '#6666aa', marginBottom: 5 }}>{showSQ ? '▲ Hide' : '▼ Show'}</span>
+            </button>
+            {showSQ && entry.security_questions.map((sq, i) => (
               <SQRow key={i} index={i} sq={sq} copied={copied} onCopy={() => copy(sq.answer, `SQ${i + 1}`)} label={`SQ${i + 1}`} />
             ))}
           </div>

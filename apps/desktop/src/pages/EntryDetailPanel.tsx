@@ -14,6 +14,7 @@ export default function EntryDetailPanel({
   const [entry, setEntry] = useState<EntryDetail | null>(null);
   const [editing, setEditing] = useState(false);
   const [showPw, setShowPw] = useState(true);
+  const [showSQView, setShowSQView] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -174,8 +175,14 @@ export default function EntryDetailPanel({
 
       {entry.security_questions && entry.security_questions.length > 0 && (
         <div style={s.fieldBlock}>
-          <span className="field-label">Security Questions</span>
-          {entry.security_questions.map((sq, i) => (
+          <button
+            onClick={() => setShowSQView(v => !v)}
+            style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'inherit' }}
+          >
+            <span className="field-label" style={{ margin: 0 }}>Security Questions ({entry.security_questions.length})</span>
+            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{showSQView ? '▲ Hide' : '▼ Show'}</span>
+          </button>
+          {showSQView && entry.security_questions.map((sq, i) => (
             <SecurityQuestionRow
               key={i}
               index={i}
