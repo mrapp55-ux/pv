@@ -13,7 +13,7 @@ export default function EntryDetailPanel({
 }) {
   const [entry, setEntry] = useState<EntryDetail | null>(null);
   const [editing, setEditing] = useState(false);
-  const [showPw, setShowPw] = useState(false);
+  const [showPw, setShowPw] = useState(true);
   const [copied, setCopied] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -165,12 +165,12 @@ export default function EntryDetailPanel({
         extra={<button className="icon-btn" onClick={() => setShowPw(v => !v)}>{showPw ? '🙈' : '👁'}</button>}
       />
       <Row label="URL" value={entry.url ?? '—'} onCopy={entry.url ? () => copyField(entry.url!, 'URL') : undefined} copied={copied === 'URL'} />
-      {entry.notes && (
-        <div style={s.fieldBlock}>
-          <span className="field-label">Notes</span>
-          <p style={{ fontSize: 13, lineHeight: 1.6, color: 'var(--text)', whiteSpace: 'pre-wrap' }}>{entry.notes}</p>
-        </div>
-      )}
+      <div style={s.fieldBlock}>
+        <span className="field-label">Notes</span>
+        <p style={{ fontSize: 13, lineHeight: 1.7, color: entry.notes ? 'var(--text)' : 'var(--text-dim)', whiteSpace: 'pre-wrap', minHeight: 60, margin: '4px 0 0' }}>
+          {entry.notes || 'No notes'}
+        </p>
+      </div>
 
       {entry.security_questions && entry.security_questions.length > 0 && (
         <div style={s.fieldBlock}>
