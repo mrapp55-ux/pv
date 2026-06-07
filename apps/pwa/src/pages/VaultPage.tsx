@@ -175,7 +175,7 @@ function SQRow({ index, sq, copied, onCopy, label }: {
         </span>
         <button style={s.iconAction} onClick={() => setShow(v => !v)}>{show ? '👁' : '🙈'}</button>
         <button style={{ ...s.iconAction, color: copied === label ? '#2ecc71' : '#8888aa' }} onClick={onCopy}>
-          {copied === label ? '✓' : '⎘'}
+          {copied === label ? '✓' : '📋'}
         </button>
       </div>
     </div>
@@ -195,7 +195,7 @@ function CopyField({ label, value, copied, onCopy }: {
             style={{ ...s.iconAction, color: copied === label ? '#2ecc71' : '#8888aa' }}
             onClick={onCopy}
           >
-            {copied === label ? '✓' : '⎘'}
+            {copied === label ? '✓' : '📋'}
           </button>
         )}
       </div>
@@ -216,7 +216,7 @@ function PasswordField({ password, copied, onCopy }: {
         </span>
         <button style={s.iconAction} onClick={() => setShow(v => !v)}>{show ? '👁' : '🙈'}</button>
         <button style={{ ...s.iconAction, color: copied ? '#2ecc71' : '#8888aa' }} onClick={onCopy}>
-          {copied ? '✓' : '⎘'}
+          {copied ? '✓' : '📋'}
         </button>
       </div>
     </div>
@@ -273,6 +273,6 @@ const s: Record<string, React.CSSProperties> = {
   fieldBlock: { background: '#1a1a2e', borderRadius: 14, padding: '12px 14px' },
   fieldLabel: { display: 'block', fontSize: 11, fontWeight: 600, color: '#8888aa', textTransform: 'uppercase' as const, letterSpacing: '0.06em', marginBottom: 5 },
   fieldValue: { fontSize: 15, color: '#fff' },
-  iconAction: { background: 'none', border: 'none', fontSize: 18, cursor: 'pointer', padding: '2px 4px', flexShrink: 0 },
+  iconAction: { background: 'none', border: 'none', fontSize: 24, cursor: 'pointer', padding: '6px 8px', flexShrink: 0 },
   meta: { fontSize: 11, color: '#444', textAlign: 'center', paddingTop: 8 },
 };
