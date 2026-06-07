@@ -3,7 +3,7 @@ import {
   listEntries, listGroups, lockVault,
   getVaultLocation, setUseGoogleDrive, setVaultFolder, relocateVault, pickVaultFolder,
   deleteVault, getAutoLockMinutes, setAutoLockMinutes, changeMasterPassword,
-  createGroup, renameGroup,
+  createEntry, createGroup, renameGroup,
   type VaultLocationInfo, type Group,
 } from '../services/tauri-bridge';
 import { useVaultStore } from '../store/vault';
@@ -227,6 +227,12 @@ function SettingsPanel({
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
 
+  // Import state
+  const [importing, setImporting] = useState(false);
+  const [importDone, setImportDone] = useState(false);
+  const [importProgress, setImportProgress] = useState(0);
+  const [importError, setImportError] = useState('');
+
   useEffect(() => {
     void (async () => {
       const [loc, minutes] = await Promise.all([getVaultLocation(), getAutoLockMinutes()]);
@@ -341,6 +347,30 @@ function SettingsPanel({
     setRenamingId(g.id);
     setRenameValue(g.name);
     setGroupError('');
+  }
+
+  // ── Import handler ────────────────────────────────────────────────────────
+
+  async function handleImport() {
+    setImporting(true); setImportError(''); setImportProgress(0);
+    try {
+      const mod = await import(/* @vite-ignore */ '../import-data');
+      const entries: Array<{ title: string; username: string | null; password: string; url: string | null; notes: string | null }> = mod.IMPORT_ENTRIES as never;
+
+      let mukiId = groups.find(g => g.name === 'Muki')?.id;
+      if (!mukiId) mukiId = await createGroup('Muki');
+
+      for (let i = 0; i < entries.length; i++) {
+        await createEntry({ ...entries[i], security_questions: null, group_id: mukiId });
+        setImportProgress(i + 1);
+      }
+      await onGroupsChanged();
+      setImportDone(true);
+    } catch (e) {
+      setImportError(String(e).includes('import-data') ? 'import-data.ts not found — create the file first.' : String(e));
+    } finally {
+      setImporting(false);
+    }
   }
 
   // ── Danger zone ───────────────────────────────────────────────────────────
@@ -507,6 +537,23 @@ function SettingsPanel({
         <button className="primary" onClick={handleChangePassword} disabled={changingPw || !oldPw || !newPw || !confirmPw}>
           {changingPw ? 'Changing password…' : 'Change Password'}
         </button>
+      </section>
+
+      {/* ── One-time Import ───────────────────────────────────────────── */}
+      <section style={ss.section}>
+        <h3 style={ss.sectionTitle}>Import Entries</h3>
+        {importDone ? (
+          <p style={ss.success}>✓ All entries imported into the "Muki" group. You can now delete import-data.ts.</p>
+        ) : (
+          <>
+            <p style={ss.desc}>Imports entries from the local import-data.ts file into the "Muki" group (creates it if needed). Run once, then delete the file.</p>
+            {importError && <p style={ss.error}>{importError}</p>}
+            {importing && <p style={ss.desc}>Importing… {importProgress} entries done</p>}
+            <button className="primary" onClick={handleImport} disabled={importing}>
+              {importing ? `Importing… (${importProgress})` : 'Import 32 entries into "Muki" group'}
+            </button>
+          </>
+        )}
       </section>
 
       {/* ── Danger Zone ───────────────────────────────────────────────── */}
