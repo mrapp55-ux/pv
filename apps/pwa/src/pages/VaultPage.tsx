@@ -273,6 +273,6 @@ const s: Record<string, React.CSSProperties> = {
   fieldBlock: { background: '#1a1a2e', borderRadius: 14, padding: '12px 14px' },
   fieldLabel: { display: 'block', fontSize: 11, fontWeight: 600, color: '#8888aa', textTransform: 'uppercase' as const, letterSpacing: '0.06em', marginBottom: 5 },
   fieldValue: { fontSize: 15, color: '#fff' },
-  iconAction: { background: 'none', border: 'none', fontSize: 24, cursor: 'pointer', padding: '6px 8px', flexShrink: 0 },
+  iconAction: { background: 'none', border: 'none', fontSize: 30, cursor: 'pointer', padding: '8px 10px', flexShrink: 0, minWidth: 44, minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center' },
   meta: { fontSize: 11, color: '#444', textAlign: 'center', paddingTop: 8 },
 };
