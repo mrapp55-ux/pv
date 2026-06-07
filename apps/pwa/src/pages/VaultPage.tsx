@@ -131,12 +131,12 @@ function EntryDetail({ entry, groupName, showGroup, onBack }: {
         <PasswordField password={entry.password} copied={copied === 'Password'} onCopy={() => copy(entry.password, 'Password')} />
         <CopyField label="URL" value={entry.url} copied={copied} onCopy={entry.url ? () => copy(entry.url!, 'URL') : undefined} />
 
-        {entry.notes && (
-          <div style={s.fieldBlock}>
-            <span style={s.fieldLabel}>Notes</span>
-            <p style={{ ...s.fieldValue, whiteSpace: 'pre-wrap', lineHeight: 1.6, marginTop: 2 }}>{entry.notes}</p>
-          </div>
-        )}
+        <div style={s.fieldBlock}>
+          <span style={s.fieldLabel}>Notes</span>
+          <p style={{ ...s.fieldValue, whiteSpace: 'pre-wrap', lineHeight: 1.7, marginTop: 4, minHeight: 80, color: entry.notes ? '#fff' : '#444' }}>
+            {entry.notes || 'No notes'}
+          </p>
+        </div>
 
         {entry.security_questions && entry.security_questions.length > 0 && (
           <div style={s.fieldBlock}>
@@ -200,7 +200,7 @@ function PasswordField({ password, copied, onCopy }: {
         <span style={{ ...s.fieldValue, flex: 1, fontFamily: 'monospace' }}>
           {show ? password : '•'.repeat(Math.min(password.length, 20))}
         </span>
-        <button style={s.iconAction} onClick={() => setShow(v => !v)}>{show ? '🙈' : '👁'}</button>
+        <button style={s.iconAction} onClick={() => setShow(v => !v)}>{show ? '👁' : '🙈'}</button>
         <button style={{ ...s.iconAction, color: copied ? '#2ecc71' : '#8888aa' }} onClick={onCopy}>
           {copied ? '✓' : '⎘'}
         </button>
