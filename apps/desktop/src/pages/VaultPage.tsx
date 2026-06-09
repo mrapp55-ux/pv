@@ -575,13 +575,13 @@ function SettingsPanel({
           Google Drive mode auto-detects the drive letter so it works even if it changes.
         </p>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 12 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 12, alignItems: 'flex-start' }}>
           <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
             <input type="radio" checked={useGD} onChange={() => setUseGD(true)} />
             <span style={{ fontSize: 13, fontWeight: 600 }}>☁ Google Drive (auto-detect drive letter)</span>
           </label>
           {useGD && location && (
-            <div style={{ marginLeft: 24 }}>
+            <div style={{ marginLeft: 24, alignSelf: 'stretch' }}>
               {location.google_drive_available
                 ? <code style={ss.path}>{location.google_drive_folder}</code>
                 : <p style={ss.error}>Google Drive not found on this machine.</p>}
