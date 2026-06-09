@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
+import * as XLSX from 'xlsx';
 import {
   listEntries, listGroups, lockVault,
   getVaultLocation, setUseGoogleDrive, setVaultFolder, relocateVault, pickVaultFolder,
-  deleteVault, getAutoLockMinutes, setAutoLockMinutes, changeMasterPassword,
+  deleteVault, getAutoLockSeconds, setAutoLockSeconds, changeMasterPassword,
   createEntry, createGroup, renameGroup,
+  getEntry, writeFile, saveFileDialog, backupVault,
   type VaultLocationInfo, type Group,
 } from '../services/tauri-bridge';
 import { useVaultStore } from '../store/vault';
@@ -192,11 +194,12 @@ export default function VaultPage({ onAutoLockChange }: { onAutoLockChange: (min
 
 const AUTO_LOCK_OPTIONS = [
   { label: 'Never', value: 0 },
-  { label: '1 minute', value: 1 },
-  { label: '5 minutes', value: 5 },
-  { label: '15 minutes', value: 15 },
-  { label: '30 minutes', value: 30 },
-  { label: '1 hour', value: 60 },
+  { label: '30 seconds', value: 30 },
+  { label: '1 minute', value: 60 },
+  { label: '5 minutes', value: 300 },
+  { label: '15 minutes', value: 900 },
+  { label: '30 minutes', value: 1800 },
+  { label: '1 hour', value: 3600 },
 ];
 
 function entropyBits(pw: string): number {
@@ -227,7 +230,7 @@ function SettingsPanel({
   const [storageError, setStorageError] = useState('');
 
   // Auto-lock state
-  const [autoLock, setAutoLock] = useState(5);
+  const [autoLock, setAutoLock] = useState(30);
 
   // Change password state
   const [oldPw, setOldPw] = useState('');
@@ -245,10 +248,18 @@ function SettingsPanel({
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
 
+  // Export & Backup state
+  const [exporting, setExporting] = useState(false);
+  const [exportMsg, setExportMsg] = useState('');
+  const [exportErr, setExportErr] = useState('');
+  const [backingUp, setBackingUp] = useState(false);
+  const [backupMsg, setBackupMsg] = useState('');
+  const [backupErr, setBackupErr] = useState('');
+
 
   useEffect(() => {
     void (async () => {
-      const [loc, minutes] = await Promise.all([getVaultLocation(), getAutoLockMinutes()]);
+      const [loc, minutes] = await Promise.all([getVaultLocation(), getAutoLockSeconds()]);
       setLocation(loc);
       setUseGD(loc.use_google_drive);
       if (!loc.use_google_drive) setCustomFolder(loc.resolved_folder);
@@ -294,10 +305,10 @@ function SettingsPanel({
 
   // ── Auto-lock handler ─────────────────────────────────────────────────────
 
-  async function handleAutoLockChange(minutes: number) {
-    setAutoLock(minutes);
-    await setAutoLockMinutes(minutes);
-    onAutoLockChange(minutes);
+  async function handleAutoLockChange(seconds: number) {
+    setAutoLock(seconds);
+    await setAutoLockSeconds(seconds);
+    onAutoLockChange(seconds);
   }
 
   // ── Change password handler ───────────────────────────────────────────────
@@ -378,9 +389,13 @@ function SettingsPanel({
     setImporting(true);
     try {
       const text = await file.text();
-      const rows: Array<{ title: string; username?: string | null; password: string; url?: string | null; notes?: string | null; group?: string | null }> = JSON.parse(text);
+      const rows: Array<{ title: string; username?: string | null; password?: string | null; url?: string | null; notes?: string | null; group?: string | null }> = JSON.parse(text);
       if (!Array.isArray(rows)) throw new Error('JSON must be an array of entries.');
       setImportTotal(rows.length);
+
+      // Build a set of existing title+group_id combos for duplicate detection
+      const existing = await listEntries();
+      const existingKeys = new Set(existing.map(ex => `${ex.title.toLowerCase()}|${ex.group_id ?? ''}`));
 
       // Collect unique group names and resolve/create group IDs
       const groupCache = new Map<string, string>();
@@ -394,35 +409,103 @@ function SettingsPanel({
         return id;
       }
 
+      const skipped: string[] = [];
+      let imported = 0;
+
       for (let i = 0; i < rows.length; i++) {
         const r = rows[i];
-        if (!r.title || !r.password) throw new Error(`Row ${i + 1} is missing title or password.`);
         const groupId = await resolveGroup(r.group);
+        const key = `${(r.title ?? '').toLowerCase()}|${groupId ?? ''}`;
+        if (existingKeys.has(key)) {
+          skipped.push(r.title ?? `Row ${i + 1}`);
+          setImportProgress(i + 1);
+          continue;
+        }
         await createEntry({
-          title: r.title,
+          title: r.title ?? '',
           username: r.username ?? null,
-          password: r.password,
+          password: r.password ?? '',
           url: r.url ?? null,
           notes: r.notes ?? null,
           security_questions: null,
           group_id: groupId,
         });
+        existingKeys.add(key);
+        imported++;
         setImportProgress(i + 1);
       }
 
-      await onGroupsChanged();
-      setImportStatus(`✓ ${rows.length} entries imported successfully.`);
+      const parts = [`✓ ${imported} entries imported.`];
+      if (skipped.length > 0) parts.push(`Skipped ${skipped.length} duplicate${skipped.length > 1 ? 's' : ''}: ${skipped.join(', ')}.`);
+      setImportStatus(parts.join(' '));
     } catch (e) {
       setImportError(String(e));
     } finally {
+      await onGroupsChanged();
       setImporting(false);
+    }
+  }
+
+  // ── Export handler ────────────────────────────────────────────────────────
+
+  async function handleExport() {
+    setExportErr(''); setExportMsg('');
+    if (!window.confirm('The exported file will contain all passwords in plain text.\n\nContinue?')) return;
+    const path = await saveFileDialog({
+      defaultPath: 'vault_export.xlsx',
+      filters: [{ name: 'Excel Workbook', extensions: ['xlsx'] }],
+    });
+    if (!path) return;
+    setExporting(true);
+    try {
+      const list = await listEntries();
+      const details = await Promise.all(list.map(e => getEntry(e.id)));
+      const groupMap = new Map(groups.map(g => [g.id, g.name]));
+      const rows = details.map(d => ({
+        Group: d.group_id ? (groupMap.get(d.group_id) ?? '') : '',
+        Title: d.title,
+        Username: d.username ?? '',
+        Password: d.password,
+        URL: d.url ?? '',
+        Notes: d.notes ?? '',
+        'Security Questions': d.security_questions
+          ? d.security_questions.map(sq => `Q: ${sq.question} / A: ${sq.answer}`).join('\n')
+          : '',
+      }));
+      const ws = XLSX.utils.json_to_sheet(rows);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Vault');
+      const buf = XLSX.write(wb, { type: 'array', bookType: 'xlsx' }) as ArrayBuffer;
+      await writeFile(path, Array.from(new Uint8Array(buf)));
+      setExportMsg('Export saved.');
+    } catch (e) {
+      setExportErr(String(e));
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  // ── Backup handler ────────────────────────────────────────────────────────
+
+  async function handleBackup() {
+    setBackupErr(''); setBackupMsg('');
+    const folder = await pickVaultFolder();
+    if (!folder) return;
+    setBackingUp(true);
+    try {
+      const stem = await backupVault(folder);
+      setBackupMsg(`Backup saved: ${stem}.db`);
+    } catch (e) {
+      setBackupErr(String(e));
+    } finally {
+      setBackingUp(false);
     }
   }
 
   // ── Danger zone ───────────────────────────────────────────────────────────
 
   async function handleDeleteVault() {
-    if (!window.confirm('Delete the vault permanently?\n\nThis removes vault.db, vault.salt, saved preferences, and the stored biometric key. This cannot be undone.')) return;
+    if (!window.confirm('Are you sure you want to delete the vault?\n\nThis is an irreversible operation — it permanently removes vault.db, vault.salt, saved preferences, and the stored biometric key.\n\nAll your passwords will be lost.')) return;
     await deleteVault();
     reset();
     setAuthState('setup');
@@ -593,12 +676,31 @@ function SettingsPanel({
           The <code style={{ fontSize: 11 }}>group</code> field is optional and will be created if it doesn't exist.
         </p>
         {importError && <p style={ss.error}>{importError}</p>}
-        {importStatus && <p style={ss.success}>{importStatus}</p>}
+        {importStatus && <p style={importStatus.startsWith('✓ 0') ? ss.warning : ss.success}>{importStatus}</p>}
         {importing && <p style={ss.desc}>Importing… {importProgress} / {importTotal}</p>}
         <label className="primary" style={{ display: 'inline-block', padding: '7px 16px', borderRadius: 6, cursor: 'pointer', fontSize: 13, fontWeight: 600, opacity: importing ? 0.55 : 1, pointerEvents: importing ? 'none' : 'auto' }}>
           {importing ? 'Importing…' : 'Choose JSON file…'}
           <input type="file" accept=".json" style={{ display: 'none' }} onChange={handleImportFile} disabled={importing} />
         </label>
+      </section>
+
+      {/* ── Export & Backup ───────────────────────────────────────────── */}
+      <section style={ss.section}>
+        <h3 style={ss.sectionTitle}>Export & Backup</h3>
+        <p style={ss.desc}>
+          Export all entries to an unencrypted Excel file, or create a copy of the
+          encrypted vault files for safekeeping.
+        </p>
+        {exportErr && <p style={ss.error}>{exportErr}</p>}
+        {exportMsg && <p style={ss.success}>{exportMsg}</p>}
+        <button className="primary" onClick={handleExport} disabled={exporting} style={{ marginBottom: 10 }}>
+          {exporting ? 'Exporting…' : 'Export to Excel…'}
+        </button>
+        {backupErr && <p style={ss.error}>{backupErr}</p>}
+        {backupMsg && <p style={ss.success}>{backupMsg}</p>}
+        <button className="ghost" onClick={handleBackup} disabled={backingUp} style={{ display: 'block' }}>
+          {backingUp ? 'Backing up…' : 'Backup Vault…'}
+        </button>
       </section>
 
       {/* ── Danger Zone ───────────────────────────────────────────────── */}
@@ -649,4 +751,5 @@ const ss: Record<string, React.CSSProperties> = {
   inputLabel: { display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase' as const, letterSpacing: '0.05em', marginBottom: 6 },
   error: { color: 'var(--danger)', fontSize: 13, marginBottom: 8 },
   success: { color: 'var(--success)', fontSize: 13, marginBottom: 8 },
+  warning: { color: '#f39c12', fontSize: 13, marginBottom: 8 },
 };

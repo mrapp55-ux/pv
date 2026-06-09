@@ -17,8 +17,9 @@ use database::{
 use biometric::{is_biometric_available, is_key_stored, request_windows_hello, retrieve_key, store_key};
 pub use sync::{
     cmd_get_vault_folder, cmd_set_vault_folder, cmd_move_vault, cmd_detect_google_drive,
-    cmd_get_auto_lock_minutes, cmd_set_auto_lock_minutes,
+    cmd_get_auto_lock_seconds, cmd_set_auto_lock_seconds,
     cmd_get_vault_location, cmd_set_use_google_drive,
+    cmd_write_file, cmd_backup_vault,
 };
 
 fn device_id() -> String {

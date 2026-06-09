@@ -71,7 +71,7 @@ export default function EntryDetailPanel({
   }
 
   async function handleDelete() {
-    if (!confirm(`Delete "${entry?.title}"? This cannot be undone.`)) return;
+    if (!confirm(`Are you sure you want to delete "${entry?.title}"?\n\nThis cannot be undone.`)) return;
     await deleteEntry(id);
     onDeleted();
   }
@@ -137,7 +137,7 @@ export default function EntryDetailPanel({
       <div style={s.panelHeader}>
         <h2 style={s.heading}>{entry.title}</h2>
         <div style={{ display: 'flex', gap: 6 }}>
-          <button className="ghost" onClick={() => setEditing(true)}>Edit</button>
+          <button className="primary" onClick={() => setEditing(true)}>Edit</button>
           <button className="danger" onClick={handleDelete}>Delete</button>
         </div>
       </div>
@@ -240,11 +240,11 @@ function SecurityQuestionsEditor({
   questions: SecurityQuestion[];
   onChange: (qs: SecurityQuestion[]) => void;
 }) {
-  const [showAnswers, setShowAnswers] = useState<boolean[]>(() => questions.map(() => false));
+  const [showAnswers, setShowAnswers] = useState<boolean[]>(() => questions.map(() => true));
 
   function add() {
     onChange([...questions, { question: '', answer: '' }]);
-    setShowAnswers(prev => [...prev, false]);
+    setShowAnswers(prev => [...prev, true]);
   }
 
   function remove(i: number) {
@@ -282,7 +282,7 @@ function SecurityQuestionsEditor({
               placeholder="Answer"
             />
             <button className="icon-btn" onClick={() => toggleShow(i)} style={{ width: 36, flexShrink: 0 }}>
-              {showAnswers[i] ? '🙈' : '👁'}
+              {showAnswers[i] ? '👁' : '🙈'}
             </button>
           </div>
         </div>
@@ -317,7 +317,7 @@ function F({ label, value, onChange, type, multiline, showToggle, autoComplete }
   label: string; value: string; onChange: (v: string) => void;
   type?: string; multiline?: boolean; showToggle?: boolean; autoComplete?: string;
 }) {
-  const [show, setShow] = useState(false);
+  const [show, setShow] = useState(true);
   const inputType = showToggle ? (show ? 'text' : 'password') : (type ?? 'text');
   return (
     <div style={{ marginBottom: 14 }}>
@@ -328,7 +328,7 @@ function F({ label, value, onChange, type, multiline, showToggle, autoComplete }
           : <input type={inputType} value={value} onChange={e => onChange(e.target.value)} autoComplete={autoComplete} />}
         {showToggle && (
           <button className="icon-btn" onClick={() => setShow(v => !v)} style={{ width: 36 }}>
-            {show ? '🙈' : '👁'}
+            {show ? '👁' : '🙈'}
           </button>
         )}
       </div>

@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { getAutoLockMinutes, isUnlocked, isVaultInitialized, lockVault } from './services/tauri-bridge';
+import { getAutoLockSeconds, isUnlocked, isVaultInitialized, lockVault } from './services/tauri-bridge';
 import { useVaultStore } from './store/vault';
 import SetupPage from './pages/SetupPage';
 import UnlockPage from './pages/UnlockPage';
@@ -10,7 +10,7 @@ const ACTIVITY_EVENTS = ['mousemove', 'keydown', 'mousedown', 'click', 'scroll']
 export default function App() {
   const { authState, setAuthState, reset } = useVaultStore();
   const lockTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const autoLockMsRef = useRef<number>(5 * 60 * 1000);
+  const autoLockMsRef = useRef<number>(30 * 1000);
 
   // Load initial vault state
   useEffect(() => {
@@ -24,7 +24,7 @@ export default function App() {
 
   // Load auto-lock setting once
   useEffect(() => {
-    getAutoLockMinutes().then(m => { autoLockMsRef.current = m * 60 * 1000; }).catch(() => {});
+    getAutoLockSeconds().then(s => { autoLockMsRef.current = s * 1000; }).catch(() => {});
   }, []);
 
   // Inactivity auto-lock
@@ -63,5 +63,5 @@ export default function App() {
 
   if (authState === 'setup') return <SetupPage />;
   if (authState === 'locked') return <UnlockPage />;
-  return <VaultPage onAutoLockChange={m => { autoLockMsRef.current = m * 60 * 1000; }} />;
+  return <VaultPage onAutoLockChange={s => { autoLockMsRef.current = s * 1000; }} />;
 }

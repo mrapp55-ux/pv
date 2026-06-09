@@ -1,6 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { usePwaStore } from './store';
-import { setAccessToken, downloadVaultFiles } from './services/drive';
+import { setAccessToken, clearAccessToken, downloadVaultFiles } from './services/drive';
+
+const AUTO_LOCK_MS = 30_000;
+const ACTIVITY_EVENTS = ['touchstart', 'mousedown', 'keydown', 'click', 'scroll'] as const;
 import { keyProvider } from './services/keyDerivation';
 import { decryptSidecar } from './services/crypto';
 import UnlockPage from './pages/UnlockPage';
@@ -50,11 +53,33 @@ function waitForGoogle(timeoutMs = 4000): Promise<boolean> {
 }
 
 export default function App() {
-  const { step, setStep, setVault } = usePwaStore();
+  const { step, setStep, setVault, lock } = usePwaStore();
+  const lockTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [saltB64,        setSaltB64]        = useState('');
   const [encryptedB64,   setEncryptedB64]   = useState('');
   const [error,          setError]          = useState('');
   const [hasCachedVault, setHasCachedVault] = useState(false);
+
+  // 30-second inactivity auto-lock
+  useEffect(() => {
+    if (step !== 'unlocked') {
+      if (lockTimerRef.current) clearTimeout(lockTimerRef.current);
+      return;
+    }
+    const schedule = () => {
+      if (lockTimerRef.current) clearTimeout(lockTimerRef.current);
+      lockTimerRef.current = setTimeout(() => {
+        clearAccessToken();
+        lock();
+      }, AUTO_LOCK_MS);
+    };
+    ACTIVITY_EVENTS.forEach(e => window.addEventListener(e, schedule, { passive: true }));
+    schedule();
+    return () => {
+      ACTIVITY_EVENTS.forEach(e => window.removeEventListener(e, schedule));
+      if (lockTimerRef.current) clearTimeout(lockTimerRef.current);
+    };
+  }, [step]);
 
   useEffect(() => {
     const cached = loadCache();

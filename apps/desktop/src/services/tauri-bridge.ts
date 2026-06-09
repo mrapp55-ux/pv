@@ -5,7 +5,7 @@
  */
 
 import { invoke } from '@tauri-apps/api/core';
-import { open } from '@tauri-apps/plugin-dialog';
+import { open, save } from '@tauri-apps/plugin-dialog';
 
 export interface SecurityQuestion {
   question: string;
@@ -144,13 +144,13 @@ export const setVaultFolder = (folder: string) =>
 export const relocateVault = (newFolder: string) =>
   invoke<void>('cmd_relocate_vault', { newFolder });
 
-/** Get auto-lock timeout in minutes (0 = disabled, default 5). */
-export const getAutoLockMinutes = () =>
-  invoke<number>('cmd_get_auto_lock_minutes');
+/** Get auto-lock timeout in seconds (0 = disabled, default 30). */
+export const getAutoLockSeconds = () =>
+  invoke<number>('cmd_get_auto_lock_seconds');
 
-/** Persist auto-lock timeout in minutes (0 = disabled). */
-export const setAutoLockMinutes = (minutes: number) =>
-  invoke<void>('cmd_set_auto_lock_minutes', { minutes });
+/** Persist auto-lock timeout in seconds (0 = disabled). */
+export const setAutoLockSeconds = (seconds: number) =>
+  invoke<void>('cmd_set_auto_lock_seconds', { seconds });
 
 /** Change master password — verifies old, re-encrypts all fields, rekeys DB. */
 export const changeMasterPassword = (oldPassword: string, newPassword: string) =>
@@ -165,3 +165,20 @@ export async function pickVaultFolder(): Promise<string | null> {
   if (typeof result === 'string') return result;
   return null;
 }
+
+/** Open a native Save File dialog. Returns the chosen path, or null if cancelled. */
+export async function saveFileDialog(opts: {
+  defaultPath?: string;
+  filters?: Array<{ name: string; extensions: string[] }>;
+}): Promise<string | null> {
+  const result = await save(opts);
+  return typeof result === 'string' ? result : null;
+}
+
+/** Write binary data to a file at the given path. */
+export const writeFile = (path: string, data: number[]) =>
+  invoke<void>('cmd_write_file', { path, data });
+
+/** Copy vault.db + vault.salt to destFolder with a timestamp suffix. Returns the filename stem. */
+export const backupVault = (destFolder: string) =>
+  invoke<string>('cmd_backup_vault', { destFolder });

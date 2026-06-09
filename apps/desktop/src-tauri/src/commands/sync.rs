@@ -6,7 +6,8 @@ use crate::error::{Result, VaultError};
 struct Config {
     vault_folder: Option<String>,
     use_google_drive: Option<bool>,
-    auto_lock_minutes: Option<u32>,
+    auto_lock_minutes: Option<u32>,  // legacy field kept for migration
+    auto_lock_seconds: Option<u32>,
 }
 
 fn config_path() -> PathBuf {
@@ -143,17 +144,26 @@ pub fn cmd_move_vault(new_folder: String) -> Result<()> {
     Ok(())
 }
 
-/// Get auto-lock timeout in minutes (0 = disabled). Default is 5.
+/// Get auto-lock timeout in seconds (0 = disabled). Default is 30.
+/// Migrates legacy auto_lock_minutes on first read.
 #[tauri::command]
-pub fn cmd_get_auto_lock_minutes() -> u32 {
-    read_config().auto_lock_minutes.unwrap_or(5)
+pub fn cmd_get_auto_lock_seconds() -> u32 {
+    let cfg = read_config();
+    if let Some(s) = cfg.auto_lock_seconds {
+        return s;
+    }
+    // Migrate from old minutes field
+    if let Some(m) = cfg.auto_lock_minutes {
+        return m * 60;
+    }
+    30
 }
 
-/// Persist the auto-lock timeout (0 = disabled).
+/// Persist the auto-lock timeout in seconds (0 = disabled).
 #[tauri::command]
-pub fn cmd_set_auto_lock_minutes(minutes: u32) -> Result<()> {
+pub fn cmd_set_auto_lock_seconds(seconds: u32) -> Result<()> {
     let mut cfg = read_config();
-    cfg.auto_lock_minutes = Some(minutes);
+    cfg.auto_lock_seconds = Some(seconds);
     write_config(&cfg)
 }
 
@@ -162,6 +172,51 @@ pub fn cmd_set_auto_lock_minutes(minutes: u32) -> Result<()> {
 pub fn cmd_detect_google_drive() -> Option<String> {
     detect_google_drive_root()
         .map(|p| normalize_path(&p.to_string_lossy()))
+}
+
+/// Write arbitrary bytes to a file path chosen by the user.
+#[tauri::command]
+pub fn cmd_write_file(path: String, data: Vec<u8>) -> crate::error::Result<()> {
+    std::fs::write(path, data)?;
+    Ok(())
+}
+
+/// Copy vault.db + vault.salt to dest_folder with a timestamp suffix.
+/// Returns the filename stem (e.g. "vault_backup_2026-06-09_143022").
+#[tauri::command]
+pub fn cmd_backup_vault(dest_folder: String) -> crate::error::Result<String> {
+    let secs = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+    let ts = epoch_to_datetime_str(secs);
+    let stem = format!("vault_backup_{ts}");
+    let dest = PathBuf::from(&dest_folder);
+    std::fs::create_dir_all(&dest)?;
+    let src = resolve_vault_folder();
+    std::fs::copy(src.join("vault.db"), dest.join(format!("{stem}.db")))?;
+    std::fs::copy(src.join("vault.salt"), dest.join(format!("{stem}.salt")))?;
+    Ok(stem)
+}
+
+fn epoch_to_datetime_str(secs: u64) -> String {
+    let time_of_day = secs % 86400;
+    let days = secs / 86400;
+    let h = time_of_day / 3600;
+    let m = (time_of_day % 3600) / 60;
+    let s = time_of_day % 60;
+    // Hinnant civil-from-days algorithm
+    let z = days as i64 + 719468;
+    let era: i64 = if z >= 0 { z } else { z - 146096 } / 146097;
+    let doe = (z - era * 146097) as u64;
+    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
+    let y = yoe as i64 + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let mo = if mp < 10 { mp + 3 } else { mp - 9 };
+    let yr = if mo <= 2 { y + 1 } else { y };
+    format!("{:04}-{:02}-{:02}_{:02}{:02}{:02}", yr, mo, d, h, m, s)
 }
 
 fn detect_google_drive_root() -> Option<PathBuf> {

@@ -148,15 +148,17 @@ When the vault is stored in a Google Drive folder, the native Google Drive deskt
 Vault config is stored in `%APPDATA%\PasswordVault\config.json` with fields:
 - `vault_folder` — absolute path for custom/local storage (null when using Google Drive mode)
 - `use_google_drive` — when `true`, the drive letter is detected at runtime so it survives remounts to a different letter
-- `auto_lock_minutes` — inactivity timeout (0 = disabled, default 5)
+- `auto_lock_seconds` — inactivity timeout in seconds (0 = disabled, default 30). Legacy `auto_lock_minutes` is migrated automatically on first read.
 
 Key commands:
 - `cmd_get_vault_location` — returns `VaultLocationInfo` (resolved folder, GDrive flag, GDrive availability)
 - `cmd_set_use_google_drive(enabled)` — toggles Google Drive mode; clears `vault_folder` when enabled
 - `cmd_set_vault_folder(folder)` — saves a custom path and sets `use_google_drive = false`
 - `cmd_relocate_vault` — moves files to a new folder while the vault is open (closes DB, copies files, reopens)
-- `cmd_get_auto_lock_minutes` / `cmd_set_auto_lock_minutes` — inactivity timeout setting
+- `cmd_get_auto_lock_seconds` / `cmd_set_auto_lock_seconds` — inactivity timeout in seconds
 - `cmd_change_master_password(old, new)` — verifies old password, re-encrypts all entry fields in one SQLite transaction, rekeys the SQLCipher DB with `PRAGMA rekey`, updates the salt sidecar, and refreshes the in-memory session and keychain
+- `cmd_write_file(path, data)` — writes a binary buffer to a user-chosen path (used by Excel export)
+- `cmd_backup_vault(dest_folder)` — copies `vault.db` + `vault.salt` to a folder with a timestamp suffix (`vault_backup_YYYY-MM-DD_HHmmss`)
 
 ### PWA (iPhone) architecture
 

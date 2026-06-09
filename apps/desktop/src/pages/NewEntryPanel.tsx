@@ -15,7 +15,7 @@ export default function NewEntryPanel({
   const [url, setUrl] = useState('');
   const [notes, setNotes] = useState('');
   const [groupId, setGroupId] = useState<string | null>(defaultGroupId ?? (groups[0]?.id ?? null));
-  const [showPw, setShowPw] = useState(false);
+  const [showPw, setShowPw] = useState(true);
   const [showSQ, setShowSQ] = useState(false);
   const [securityQuestions, setSecurityQuestions] = useState<SecurityQuestion[]>([]);
   const [error, setError] = useState('');
@@ -28,7 +28,6 @@ export default function NewEntryPanel({
 
   async function handleSave() {
     if (!title.trim()) { setError('Title is required.'); return; }
-    if (!password) { setError('Password is required.'); return; }
     setSaving(true); setError('');
     try {
       const id = await createEntry({
@@ -76,7 +75,7 @@ export default function NewEntryPanel({
             autoComplete="new-password"
           />
           <button className="icon-btn" onClick={() => setShowPw(v => !v)} style={{ width: 36 }}>
-            {showPw ? '🙈' : '👁'}
+            {showPw ? '👁' : '🙈'}
           </button>
           <button className="icon-btn" onClick={fillGenerated} title="Generate password">⚡</button>
         </div>
@@ -135,11 +134,11 @@ function SecurityQuestionsEditor({
   questions: SecurityQuestion[];
   onChange: (qs: SecurityQuestion[]) => void;
 }) {
-  const [showAnswers, setShowAnswers] = useState<boolean[]>(() => questions.map(() => false));
+  const [showAnswers, setShowAnswers] = useState<boolean[]>(() => questions.map(() => true));
 
   function add() {
     onChange([...questions, { question: '', answer: '' }]);
-    setShowAnswers(prev => [...prev, false]);
+    setShowAnswers(prev => [...prev, true]);
   }
 
   function remove(i: number) {
@@ -177,7 +176,7 @@ function SecurityQuestionsEditor({
               placeholder="Answer"
             />
             <button className="icon-btn" onClick={() => toggleShow(i)} style={{ width: 36, flexShrink: 0 }}>
-              {showAnswers[i] ? '🙈' : '👁'}
+              {showAnswers[i] ? '👁' : '🙈'}
             </button>
           </div>
         </div>
