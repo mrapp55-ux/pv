@@ -34,6 +34,7 @@ pub fn run() {
             cmd_list_groups,
             cmd_create_group,
             cmd_rename_group,
+            cmd_delete_group,
             // Sync / vault location
             cmd_get_vault_folder,
             cmd_set_vault_folder,

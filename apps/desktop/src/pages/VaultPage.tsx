@@ -4,7 +4,7 @@ import {
   listEntries, listGroups, lockVault,
   getVaultLocation, setUseGoogleDrive, setVaultFolder, relocateVault, pickVaultFolder,
   deleteVault, getAutoLockSeconds, setAutoLockSeconds, changeMasterPassword,
-  createEntry, createGroup, renameGroup,
+  createEntry, createGroup, renameGroup, deleteGroup,
   getEntry, writeFile, saveFileDialog, backupVault,
   type VaultLocationInfo, type Group,
 } from '../services/tauri-bridge';
@@ -219,7 +219,7 @@ function SettingsPanel({
   groups: Group[];
   onGroupsChanged: () => Promise<void>;
 }) {
-  const { reset, setAuthState } = useVaultStore();
+  const { reset, setAuthState, entries } = useVaultStore();
 
   // Storage state
   const [location, setLocation] = useState<VaultLocationInfo | null>(null);
@@ -247,6 +247,7 @@ function SettingsPanel({
   const [groupError, setGroupError] = useState('');
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
+  const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null);
 
   // Export & Backup state
   const [exporting, setExporting] = useState(false);
@@ -371,6 +372,17 @@ function SettingsPanel({
     setRenamingId(g.id);
     setRenameValue(g.name);
     setGroupError('');
+  }
+
+  async function handleDeleteGroup(g: Group) {
+    setGroupError('');
+    setConfirmingDeleteId(null);
+    try {
+      await deleteGroup(g.id);
+      await onGroupsChanged();
+    } catch (e) {
+      setGroupError(String(e));
+    }
   }
 
   // ── Import handler ────────────────────────────────────────────────────────
@@ -527,28 +539,49 @@ function SettingsPanel({
         <p style={ss.desc}>Organise your entries into groups. Each entry belongs to one group.</p>
 
         <div style={{ marginBottom: 12 }}>
-          {groups.map(g => (
-            <div key={g.id} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-              {renamingId === g.id ? (
-                <>
-                  <input
-                    value={renameValue}
-                    onChange={e => setRenameValue(e.target.value)}
-                    onKeyDown={e => { if (e.key === 'Enter') void handleRename(g.id); if (e.key === 'Escape') setRenamingId(null); }}
-                    style={{ flex: 1, fontSize: 13 }}
-                    autoFocus
-                  />
-                  <button className="primary" onClick={() => handleRename(g.id)} style={{ padding: '4px 10px', fontSize: 12 }}>Save</button>
-                  <button className="ghost" onClick={() => setRenamingId(null)} style={{ padding: '4px 10px', fontSize: 12 }}>Cancel</button>
-                </>
-              ) : (
-                <>
-                  <span style={{ flex: 1, fontSize: 13 }}>{g.name}</span>
-                  <button className="ghost" onClick={() => startRename(g)} style={{ padding: '3px 10px', fontSize: 12 }}>Rename</button>
-                </>
-              )}
-            </div>
-          ))}
+          {groups.map(g => {
+            const entryCount = entries.filter(e => e.group_id === g.id).length;
+            const fallback = groups.find(other => other.id !== g.id);
+            return (
+              <div key={g.id} style={{ marginBottom: 6 }}>
+                {renamingId === g.id ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <input
+                      value={renameValue}
+                      onChange={e => setRenameValue(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter') void handleRename(g.id); if (e.key === 'Escape') setRenamingId(null); }}
+                      style={{ flex: 1, fontSize: 13 }}
+                      autoFocus
+                    />
+                    <button className="primary" onClick={() => handleRename(g.id)} style={{ padding: '4px 10px', fontSize: 12 }}>Save</button>
+                    <button className="ghost" onClick={() => setRenamingId(null)} style={{ padding: '4px 10px', fontSize: 12 }}>Cancel</button>
+                  </div>
+                ) : confirmingDeleteId === g.id ? (
+                  <div style={{ background: 'rgba(231,76,60,0.08)', border: '1px solid rgba(231,76,60,0.3)', borderRadius: 6, padding: '8px 10px' }}>
+                    <p style={{ fontSize: 12, color: 'var(--danger)', marginBottom: 6 }}>
+                      Delete <strong>{g.name}</strong>?
+                      {entryCount > 0
+                        ? ` ${entryCount} ${entryCount === 1 ? 'entry' : 'entries'} will be moved to "${fallback?.name ?? 'another group'}".`
+                        : ' This group is empty.'}
+                      {' '}This cannot be undone.
+                    </p>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <button onClick={() => handleDeleteGroup(g)} style={{ padding: '3px 10px', fontSize: 12, background: 'var(--danger)', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 600 }}>
+                        Yes, delete
+                      </button>
+                      <button className="ghost" onClick={() => setConfirmingDeleteId(null)} style={{ padding: '3px 10px', fontSize: 12 }}>Cancel</button>
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ flex: 1, fontSize: 13 }}>{g.name}</span>
+                    <button className="ghost" onClick={() => startRename(g)} style={{ padding: '3px 10px', fontSize: 12 }}>Rename</button>
+                    <button className="ghost" onClick={() => { setConfirmingDeleteId(g.id); setGroupError(''); }} disabled={groups.length <= 1} style={{ padding: '3px 10px', fontSize: 12, color: groups.length > 1 ? 'var(--danger)' : undefined }}>Delete</button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
 
         {groupError && <p style={ss.error}>{groupError}</p>}
@@ -576,8 +609,8 @@ function SettingsPanel({
         </p>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 12, alignItems: 'flex-start' }}>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
-            <input type="radio" checked={useGD} onChange={() => setUseGD(true)} />
+          <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, cursor: 'pointer' }}>
+            <input type="radio" checked={useGD} onChange={() => setUseGD(true)} style={{ marginTop: 2, flexShrink: 0 }} />
             <span style={{ fontSize: 13, fontWeight: 600 }}>☁ Google Drive (auto-detect drive letter)</span>
           </label>
           {useGD && location && (

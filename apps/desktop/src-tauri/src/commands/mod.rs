@@ -11,7 +11,7 @@ use crypto::{derive_key, generate_salt, hkdf_field_key, encrypt_field, decrypt_f
 use database::{
     delete_entry, get_entry, insert_metadata, init_schema, migrate_schema, list_entries,
     open_encrypted, create_entry, update_entry, get_salt, ensure_default_group,
-    list_groups, create_group, rename_group,
+    list_groups, create_group, rename_group, delete_group,
     EntryDetail, EntryInput, EntryListItem, Group,
 };
 use biometric::{is_biometric_available, is_key_stored, request_windows_hello, retrieve_key, store_key};
@@ -443,6 +443,17 @@ pub fn cmd_rename_group(id: String, name: String, state: State<AppState>) -> Res
     let db_guard = state.db.lock().unwrap();
     let conn = db_guard.as_ref().ok_or(VaultError::Locked)?;
     rename_group(conn, &id, &name)
+}
+
+#[tauri::command]
+pub fn cmd_delete_group(id: String, state: State<AppState>) -> Result<()> {
+    let db_guard = state.db.lock().unwrap();
+    let conn = db_guard.as_ref().ok_or(VaultError::Locked)?;
+    let sess_guard = state.session.lock().unwrap();
+    let session = sess_guard.as_ref().ok_or(VaultError::Locked)?;
+    delete_group(conn, &id)?;
+    write_sidecar(conn, session);
+    Ok(())
 }
 
 #[tauri::command]

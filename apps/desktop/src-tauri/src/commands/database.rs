@@ -185,6 +185,25 @@ pub fn rename_group(conn: &Connection, id: &str, name: &str) -> Result<()> {
     Ok(())
 }
 
+pub fn delete_group(conn: &Connection, id: &str) -> Result<()> {
+    let count: i64 = conn.query_row("SELECT COUNT(*) FROM groups", [], |r| r.get(0))?;
+    if count <= 1 {
+        return Err(VaultError::Other("Cannot delete the last group.".into()));
+    }
+    let fallback: String = conn.query_row(
+        "SELECT id FROM groups WHERE id != ?1 ORDER BY created_at ASC LIMIT 1",
+        params![id],
+        |r| r.get(0),
+    )?;
+    conn.execute(
+        "UPDATE vault_entries SET group_id = ?1 WHERE group_id = ?2",
+        params![fallback, id],
+    )?;
+    let rows = conn.execute("DELETE FROM groups WHERE id = ?1", params![id])?;
+    if rows == 0 { return Err(VaultError::NotFound(id.into())); }
+    Ok(())
+}
+
 // ─── Entry types ─────────────────────────────────────────────────────────────
 
 #[derive(serde::Serialize, serde::Deserialize, Clone)]

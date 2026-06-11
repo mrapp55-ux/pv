@@ -88,7 +88,9 @@ export default function App() {
       setEncryptedB64(cached.encryptedB64);
       setHasCachedVault(true);
       setStep('password');
-      silentSync(cached, setSaltB64, setEncryptedB64);
+      silentSync(setSaltB64, setEncryptedB64);
+    } else if (!navigator.onLine) {
+      setError('You\'re offline and no vault cache was found. Open PV while connected to Google at least once to enable offline access.');
     }
   }, []);
 
@@ -176,7 +178,6 @@ export default function App() {
 }
 
 async function silentSync(
-  cached: { saltB64: string; encryptedB64: string },
   setSaltB64: (s: string) => void,
   setEncryptedB64: (s: string) => void,
 ) {

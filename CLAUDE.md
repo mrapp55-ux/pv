@@ -76,7 +76,7 @@ packages/shared-types/    TypeScript interfaces (VaultEntry, SyncMetadata, etc.)
 packages/shared-crypto/   Crypto primitives: Argon2id, AES-256-GCM, HKDF, key lifecycle
 packages/shared-db/       SQLite schema DDL, parameterized query strings, migrations
 packages/shared-ui/       Shared React/RN components
-apps/mobile/              Expo + React Native app (unused — replaced by PWA)
+apps/mobile/              Expo + React Native app (iOS + Android, active — Google Drive sync via API)
 apps/desktop/             Tauri v2 app (React/Vite frontend + Rust backend)
 apps/pwa/                 iPhone PWA — hosted on GitHub Pages, read-only vault access
 ```
@@ -159,6 +159,7 @@ Key commands:
 - `cmd_change_master_password(old, new)` — verifies old password, re-encrypts all entry fields in one SQLite transaction, rekeys the SQLCipher DB with `PRAGMA rekey`, updates the salt sidecar, and refreshes the in-memory session and keychain
 - `cmd_write_file(path, data)` — writes a binary buffer to a user-chosen path (used by Excel export)
 - `cmd_backup_vault(dest_folder)` — copies `vault.db` + `vault.salt` to a folder with a timestamp suffix (`vault_backup_YYYY-MM-DD_HHmmss`)
+- `cmd_delete_group(id)` — deletes a group and reassigns its entries to the oldest remaining group; returns an error if only one group exists
 
 ### PWA (iPhone) architecture
 
@@ -254,3 +255,16 @@ All SQL lives in `packages/shared-db/src/queries.ts` as the `Q` object. Never in
 - Clipboard copies use `copySecure()` from `services/clipboard.ts`, which schedules a 30-second auto-clear. Do not call `Clipboard.setString()` directly for sensitive values.
 - Desktop: `Zeroizing<[u8; 32]>` in Rust automatically zeroes key bytes on drop. Never copy a `SessionKey` — pass references. `SessionKey` holds 4 derived keys: `master`, `field_password`, `field_notes`, `field_security_questions`.
 - The `vault.salt` sidecar file is NOT secret (the salt only needs to be unique, not confidential). It is safe for it to be stored in Google Drive alongside the encrypted DB.
+
+## Tauri-specific gotchas
+
+- **`window.confirm` is unreliable** — Tauri's WebView silently returns `true` without showing any dialog. Never use `window.confirm` or `window.alert` for any UI. Use inline React state-based confirmation UI instead (render a warning panel in the component).
+- **`window.open` is blocked** — use `open()` from `@tauri-apps/plugin-shell` for external URLs.
+
+## Offline behavior
+
+**Desktop:** Works offline out of the box. The vault is read from local SQLite files — no network in the unlock path.
+
+**PWA:** Google Identity Services (`accounts.google.com/gsi/client`) is loaded from CDN and is not cached by the service worker. If `localStorage` has a cached vault (keys `pv_salt` + `pv_enc`), the app goes straight to the password screen with no network needed. If there is no cache and the device is offline, the app shows an informative error rather than hanging at the Google sign-in screen.
+
+**Mobile:** `syncOnOpen()` is wrapped in `Promise.race` with a 5-second timeout. On iOS, `GoogleSignin.getTokens()` can hang for 30–60 s when offline; the timeout ensures the unlock flow proceeds without stalling.

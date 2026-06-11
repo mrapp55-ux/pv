@@ -54,12 +54,18 @@ export async function signOutOfGoogle(): Promise<void> {
  * Called on app open after unlock.
  * If the Drive vault is newer than the local one, downloads it and returns true
  * (caller should close + reopen the DB).
- * Returns false if already up-to-date or not signed in.
+ * Returns false if already up-to-date, not signed in, or offline.
+ * Caps the entire sync at 5 s so a network timeout never stalls unlock.
  */
 export async function syncOnOpen(): Promise<boolean> {
   if (!isGoogleSignedIn()) return false;
   try {
-    const token = await getAccessToken();
+    const token = await Promise.race([
+      getAccessToken(),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('sync timeout')), 5_000),
+      ),
+    ]);
     const dbFileId = await getOrCacheFileId(token, DB_FILE_NAME, STORE_DB_FILE_ID);
     if (!dbFileId) return false; // no vault on Drive yet
 

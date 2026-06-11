@@ -110,6 +110,9 @@ export const createGroup = (name: string) =>
 export const renameGroup = (id: string, name: string) =>
   invoke<void>('cmd_rename_group', { id, name });
 
+export const deleteGroup = (id: string) =>
+  invoke<void>('cmd_delete_group', { id });
+
 // ─── Utilities ────────────────────────────────────────────────────────────────
 
 export const generatePassword = (opts?: {
