@@ -5,7 +5,7 @@ import { useVaultStore } from '../store/vault';
 export default function UnlockPage() {
   const { setAuthState, setEntries, reset } = useVaultStore();
   const [password, setPassword] = useState('');
-  const [showPw, setShowPw] = useState(false);
+  const [showPw, setShowPw] = useState(true);
   const [bioAvail, setBioAvail] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);

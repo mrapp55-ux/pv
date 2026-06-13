@@ -262,8 +262,11 @@ function SettingsPanel({
     void (async () => {
       const [loc, minutes] = await Promise.all([getVaultLocation(), getAutoLockSeconds()]);
       setLocation(loc);
-      setUseGD(loc.use_google_drive);
-      if (!loc.use_google_drive) setCustomFolder(loc.resolved_folder);
+      const gdActive = loc.use_google_drive ||
+        (loc.google_drive_available && loc.google_drive_folder !== null &&
+         loc.resolved_folder === loc.google_drive_folder);
+      setUseGD(gdActive);
+      if (!gdActive) setCustomFolder(loc.resolved_folder);
       setAutoLock(minutes);
     })();
   }, []);
@@ -608,7 +611,7 @@ function SettingsPanel({
           Google Drive mode auto-detects the drive letter so it works even if it changes.
         </p>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 12, alignItems: 'flex-start' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 12, alignItems: 'flex-start', direction: 'ltr' }}>
           <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, cursor: 'pointer' }}>
             <input type="radio" checked={useGD} onChange={() => setUseGD(true)} style={{ marginTop: 2, flexShrink: 0 }} />
             <span style={{ fontSize: 13, fontWeight: 600 }}>☁ Google Drive (auto-detect drive letter)</span>

@@ -7,6 +7,7 @@ import {
   isVaultInitialized,
   listEntries,
   pickVaultFolder,
+  setUseGoogleDrive,
   setVaultFolder,
   unlockVault,
 } from '../services/tauri-bridge';
@@ -25,7 +26,7 @@ export default function SetupPage() {
   const { setAuthState, setEntries } = useVaultStore();
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
-  const [showPw, setShowPw] = useState(false);
+  const [showPw, setShowPw] = useState(true);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -68,6 +69,7 @@ export default function SetupPage() {
     setLoading(true);
     try {
       await unlockVault(password);
+      await setUseGoogleDrive(true).catch(() => {});
       setEntries(await listEntries());
       setAuthState('unlocked');
     } catch {
@@ -89,6 +91,9 @@ export default function SetupPage() {
       }
       const bioAvail = await isBiometricAvailable().catch(() => false);
       await initializeVault(password, bioAvail);
+      if (driveDetected && vaultFolder.trim() === driveDetected) {
+        await setUseGoogleDrive(true).catch(() => {});
+      }
       setEntries(await listEntries());
       setAuthState('unlocked');
     } catch (e) {
