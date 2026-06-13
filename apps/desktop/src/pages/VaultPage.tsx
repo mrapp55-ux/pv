@@ -611,22 +611,22 @@ function SettingsPanel({
           Google Drive mode auto-detects the drive letter so it works even if it changes.
         </p>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 12, alignItems: 'flex-start', direction: 'ltr' }}>
-          <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, cursor: 'pointer' }}>
-            <input type="radio" checked={useGD} onChange={() => setUseGD(true)} style={{ marginTop: 2, flexShrink: 0 }} />
-            <span style={{ fontSize: 13, fontWeight: 600 }}>☁ Google Drive (auto-detect drive letter)</span>
+        <div style={{ marginBottom: 12, direction: 'ltr' }}>
+          <label style={{ display: 'block', cursor: 'pointer', marginBottom: 6, direction: 'ltr' }}>
+            <input type="radio" checked={useGD} onChange={() => setUseGD(true)} style={{ verticalAlign: 'middle', marginRight: 8 }} />
+            <span style={{ fontSize: 13, fontWeight: 600, verticalAlign: 'middle' }}>☁ Google Drive (auto-detect drive letter)</span>
           </label>
           {useGD && location && (
-            <div style={{ marginLeft: 24, alignSelf: 'stretch' }}>
+            <div style={{ marginLeft: 24, marginBottom: 6 }}>
               {location.google_drive_available
                 ? <code style={ss.path}>{location.google_drive_folder}</code>
                 : <p style={ss.error}>Google Drive not found on this machine.</p>}
             </div>
           )}
 
-          <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
-            <input type="radio" checked={!useGD} onChange={() => setUseGD(false)} />
-            <span style={{ fontSize: 13, fontWeight: 600 }}>📁 Local / custom folder</span>
+          <label style={{ display: 'block', cursor: 'pointer', marginBottom: 6, direction: 'ltr' }}>
+            <input type="radio" checked={!useGD} onChange={() => setUseGD(false)} style={{ verticalAlign: 'middle', marginRight: 8 }} />
+            <span style={{ fontSize: 13, fontWeight: 600, verticalAlign: 'middle' }}>📁 Local / custom folder</span>
           </label>
           {!useGD && (
             <div style={{ marginLeft: 24, display: 'flex', gap: 6 }}>

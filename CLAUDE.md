@@ -260,6 +260,7 @@ All SQL lives in `packages/shared-db/src/queries.ts` as the `Q` object. Never in
 
 - **`window.confirm` is unreliable** — Tauri's WebView silently returns `true` without showing any dialog. Never use `window.confirm` or `window.alert` for any UI. Use inline React state-based confirmation UI instead (render a warning panel in the component).
 - **`window.open` is blocked** — use `open()` from `@tauri-apps/plugin-shell` for external URLs.
+- **Flex layout misaligns in RTL contexts** — Tauri's WebView can inherit RTL direction (e.g. from Hebrew vault entries), causing flex-row labels to display radio buttons and text far apart. Fix: use `display: block` on `<label>` elements with `direction: 'ltr'` and inline `<input>`/`<span>` children using `verticalAlign: 'middle'` and `marginRight` for spacing instead of flex gap.
 
 ## Offline behavior
 
