@@ -4,9 +4,11 @@ import {
   generatePassword,
   initializeVault,
   isBiometricAvailable,
+  isVaultInitialized,
   listEntries,
   pickVaultFolder,
   setVaultFolder,
+  unlockVault,
 } from '../services/tauri-bridge';
 import { useVaultStore } from '../store/vault';
 
@@ -31,18 +33,23 @@ export default function SetupPage() {
   const [vaultFolder, setVaultFolderState] = useState('');
   const [driveDetected, setDriveDetected] = useState<string | null>(null);
   const [locationReady, setLocationReady] = useState(false);
+  const [existingVault, setExistingVault] = useState(false);
 
   const bits = entropyBits(password);
   const strength = bits < 28 ? 'Weak' : bits < 40 ? 'Fair' : bits < 60 ? 'Strong' : 'Very strong';
   const strengthColor = bits < 28 ? '#e74c3c' : bits < 40 ? '#f39c12' : bits < 60 ? '#2ecc71' : '#27ae60';
 
-  // Auto-detect Google Drive on mount
+  // Auto-detect Google Drive on mount; check if an existing vault is already there
   useEffect(() => {
     void (async () => {
       const loc = await getVaultLocation().catch(() => null);
       if (loc?.google_drive_available && loc.google_drive_folder) {
         setDriveDetected(loc.google_drive_folder);
         setVaultFolderState(loc.google_drive_folder);
+        // Point Rust at the Drive folder so isVaultInitialized checks there
+        await setVaultFolder(loc.google_drive_folder).catch(() => {});
+        const hasVault = await isVaultInitialized().catch(() => false);
+        setExistingVault(hasVault);
       }
       setLocationReady(true);
     })();
@@ -52,6 +59,21 @@ export default function SetupPage() {
     const picked = await pickVaultFolder();
     if (picked) {
       setVaultFolderState(picked);
+    }
+  }
+
+  async function handleJoin() {
+    setError('');
+    if (!password) { setError('Enter your master password.'); return; }
+    setLoading(true);
+    try {
+      await unlockVault(password);
+      setEntries(await listEntries());
+      setAuthState('unlocked');
+    } catch {
+      setError('Incorrect password.');
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -84,6 +106,49 @@ export default function SetupPage() {
   const isGoogleDriveFolder = vaultFolder && (
     vaultFolder.includes('My Drive') || vaultFolder.includes('Google Drive')
   );
+
+  if (existingVault) {
+    return (
+      <div style={s.wrap}>
+        <div style={s.card}>
+          <div style={s.logo}>🔐</div>
+          <h1 style={s.title}>Vault Found</h1>
+          <p style={s.subtitle}>
+            An existing vault was found on Google Drive at{' '}
+            <code style={{ fontSize: 11 }}>{driveDetected}</code>.
+            Enter your master password to unlock it.
+          </p>
+
+          <label style={s.label}>Master Password</label>
+          <div style={s.row}>
+            <input
+              type={showPw ? 'text' : 'password'}
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleJoin()}
+              placeholder="Master password…"
+              autoComplete="current-password"
+              autoFocus
+            />
+            <button className="icon-btn" onClick={() => setShowPw(v => !v)} style={{ marginLeft: 6, width: 36 }}>
+              {showPw ? '👁' : '🙈'}
+            </button>
+          </div>
+
+          {error && <p style={s.error}>{error}</p>}
+
+          <button
+            className="primary"
+            onClick={handleJoin}
+            disabled={loading}
+            style={{ width: '100%', padding: '11px 0', marginTop: 16 }}
+          >
+            {loading ? 'Unlocking…' : 'Unlock Vault'}
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={s.wrap}>
