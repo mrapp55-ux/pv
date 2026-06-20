@@ -2,12 +2,41 @@ use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 use crate::error::{Result, VaultError};
 
+// Machine-local config — never synced (paths are device-specific).
 #[derive(Serialize, Deserialize, Default, Clone)]
 struct Config {
     vault_folder: Option<String>,
     use_google_drive: Option<bool>,
     auto_lock_minutes: Option<u32>,  // legacy field kept for migration
+    auto_lock_seconds: Option<u32>,  // legacy — superseded by SyncedSettings
+}
+
+// User preferences stored inside the vault folder so Drive syncs them across devices.
+#[derive(Serialize, Deserialize, Default, Clone)]
+struct SyncedSettings {
     auto_lock_seconds: Option<u32>,
+}
+
+fn synced_settings_path() -> PathBuf {
+    resolve_vault_folder().join("vault.settings.json")
+}
+
+fn read_synced_settings() -> SyncedSettings {
+    std::fs::read_to_string(synced_settings_path())
+        .ok()
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or_default()
+}
+
+fn write_synced_settings(s: &SyncedSettings) -> Result<()> {
+    let path = synced_settings_path();
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let json = serde_json::to_string_pretty(s)
+        .map_err(|e| VaultError::Other(e.to_string()))?;
+    std::fs::write(&path, json)?;
+    Ok(())
 }
 
 fn config_path() -> PathBuf {
@@ -145,14 +174,18 @@ pub fn cmd_move_vault(new_folder: String) -> Result<()> {
 }
 
 /// Get auto-lock timeout in seconds (0 = disabled). Default is 30.
-/// Migrates legacy auto_lock_minutes on first read.
+/// Reads from vault.settings.json (synced via Drive); falls back to local config for migration.
 #[tauri::command]
 pub fn cmd_get_auto_lock_seconds() -> u32 {
+    let synced = read_synced_settings();
+    if let Some(s) = synced.auto_lock_seconds {
+        return s;
+    }
+    // Migrate from old local config
     let cfg = read_config();
     if let Some(s) = cfg.auto_lock_seconds {
         return s;
     }
-    // Migrate from old minutes field
     if let Some(m) = cfg.auto_lock_minutes {
         return m * 60;
     }
@@ -160,11 +193,12 @@ pub fn cmd_get_auto_lock_seconds() -> u32 {
 }
 
 /// Persist the auto-lock timeout in seconds (0 = disabled).
+/// Writes to vault.settings.json inside the vault folder so it syncs across devices via Drive.
 #[tauri::command]
 pub fn cmd_set_auto_lock_seconds(seconds: u32) -> Result<()> {
-    let mut cfg = read_config();
-    cfg.auto_lock_seconds = Some(seconds);
-    write_config(&cfg)
+    let mut s = read_synced_settings();
+    s.auto_lock_seconds = Some(seconds);
+    write_synced_settings(&s)
 }
 
 /// Try to find the Google Drive root (My Drive folder) on the current machine.
