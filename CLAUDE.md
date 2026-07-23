@@ -13,7 +13,13 @@ These files may exist at `G:\My Drive\PV\` or any user-configured vault folder. 
 
 ## Project Overview
 
-A cross-platform password manager. Mobile app (iOS + Android) built with Expo + React Native; desktop app (Tauri v2 + Rust) built in Phase 3. Data is stored in a SQLCipher-encrypted SQLite database and synced via Google Drive (zero-knowledge — cloud provider never sees plaintext).
+A cross-platform password manager with three active apps:
+
+- **Desktop** (Tauri v2 + Rust + React/Vite, Windows) — primary app; full read/write vault access.
+- **iPhone** — the **PWA** at `https://mrapp55-ux.github.io/pv/` (`apps/pwa/`). This is what the user opens on their iPhone. It is a React + Vite web app deployed to GitHub Pages. **Not the React Native app.**
+- **React Native app** (`apps/mobile/`) — exists in the codebase but is **not** the active iPhone experience. Do not suggest building or running it for iPhone-related tasks.
+
+Data is stored in a SQLCipher-encrypted SQLite database and synced via Google Drive (zero-knowledge — cloud provider never sees plaintext).
 
 ## Commands
 
@@ -85,9 +91,9 @@ packages/shared-types/    TypeScript interfaces (VaultEntry, SyncMetadata, etc.)
 packages/shared-crypto/   Crypto primitives: Argon2id, AES-256-GCM, HKDF, key lifecycle
 packages/shared-db/       SQLite schema DDL, parameterized query strings, migrations
 packages/shared-ui/       Shared React/RN components
-apps/mobile/              Expo + React Native app (iOS + Android, active — Google Drive sync via API)
-apps/desktop/             Tauri v2 app (React/Vite frontend + Rust backend)
-apps/pwa/                 iPhone PWA — hosted on GitHub Pages, read-only vault access
+apps/desktop/             Tauri v2 app (React/Vite frontend + Rust backend) — ACTIVE, Windows
+apps/pwa/                 ACTIVE iPhone app — React + Vite PWA, GitHub Pages, read-only vault access
+apps/mobile/              Expo + React Native app — exists in codebase, NOT the active iPhone app
 ```
 
 ### Encryption architecture (critical to understand)
@@ -212,7 +218,7 @@ apps/pwa/
 - Deploy: automatic via `.github/workflows/deploy-pwa.yml` on push to `apps/pwa/**`
 - Secret required: `VITE_GOOGLE_CLIENT_ID` in repo Settings → Secrets → Actions
 
-### Mobile app routing
+### React Native app routing (not the iPhone app — see PWA section above)
 
 Expo Router (file-based) with two route groups:
 - `(auth)/setup` — first-time vault creation OR "join existing vault from Google Drive"
@@ -223,7 +229,7 @@ Expo Router (file-based) with two route groups:
 
 The root `_layout.tsx` handles: screenshot prevention, Google Sign-In configuration, auth-state routing guard, and AppState-based auto-lock (60-second timer when app goes to background).
 
-### Mobile sync (Google Drive API)
+### React Native app sync (Google Drive API) — not used on iPhone
 
 `apps/mobile/src/services/sync.ts` — Google Drive REST API v3.
 
