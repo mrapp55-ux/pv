@@ -198,16 +198,14 @@ export default function App() {
       masterKeyRef.current = masterKey;
       setVault(payload.entries, payload.groups);
       setStep('unlocked');
-      // Offer Face ID enrollment if not already set up
-      if (!hasFaceIdEnrolled()) {
-        const available = await PublicKeyCredential
-          .isUserVerifyingPlatformAuthenticatorAvailable()
-          .catch(() => false);
-        if (available) setFaceIdPromo(true);
-      }
     } catch {
       setError('Wrong password, or the vault file is corrupt.');
       setStep('password');
+      return;
+    }
+    // Offer Face ID enrollment outside the try/catch so it can't affect the unlock state
+    if (!hasFaceIdEnrolled() && typeof PublicKeyCredential !== 'undefined') {
+      setFaceIdPromo(true);
     }
   }
 
