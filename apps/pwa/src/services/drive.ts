@@ -53,6 +53,23 @@ async function downloadText(fileId: string): Promise<string> {
   return res.text();
 }
 
+/** Download vault.settings.json from the PV folder. Returns null if missing or unreadable. */
+export async function downloadSettings(): Promise<{ auto_lock_seconds?: number } | null> {
+  try {
+    const folderId = await findFolderId();
+    const q = encodeURIComponent(
+      `name='vault.settings.json' and '${folderId}' in parents and trashed=false`,
+    );
+    const res = await driveGet(`/files?q=${q}&fields=files(id)&spaces=drive`);
+    const data = await res.json() as { files: Array<{ id: string }> };
+    if (!data.files.length) return null;
+    const text = await downloadText(data.files[0].id);
+    return JSON.parse(text) as { auto_lock_seconds?: number };
+  } catch {
+    return null;
+  }
+}
+
 /** Download vault.salt and vault.enc from the PV folder in My Drive. */
 export async function downloadVaultFiles(): Promise<{ saltB64: string; encryptedB64: string }> {
   const folderId = await findFolderId();

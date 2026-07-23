@@ -10,6 +10,8 @@ android/
 *.db
 *.db-shm
 *.db-wal
+*.salt
+*.enc
 
 # Rust build artifacts
 target/

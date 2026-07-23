@@ -7,8 +7,7 @@ import { useVaultStore } from '../store/vault';
 import { isUnlocked, lock } from '@vault/shared-crypto';
 import { closeDatabase } from '../services/database';
 import { GOOGLE_WEB_CLIENT_ID, GOOGLE_IOS_CLIENT_ID } from '../config/googleAuth';
-
-const AUTO_LOCK_MS = 60_000;
+import { getAutoLockMs } from '../services/sync';
 
 let lockTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -81,7 +80,10 @@ async function checkInitialState() {
 
 function handleAppStateChange(nextState: AppStateStatus) {
   if (nextState === 'background' || nextState === 'inactive') {
-    lockTimer = setTimeout(performLock, AUTO_LOCK_MS);
+    void getAutoLockMs().then(ms => {
+      if (ms === 0) return;
+      lockTimer = setTimeout(performLock, ms);
+    });
   } else if (nextState === 'active') {
     if (lockTimer) {
       clearTimeout(lockTimer);

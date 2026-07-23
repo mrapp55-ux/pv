@@ -1,8 +1,12 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, type MutableRefObject } from 'react';
 import { usePwaStore } from './store';
-import { setAccessToken, clearAccessToken, downloadVaultFiles } from './services/drive';
+import { setAccessToken, clearAccessToken, downloadVaultFiles, downloadSettings } from './services/drive';
 
-const AUTO_LOCK_MS = 30_000;
+const CACHE_AUTO_LOCK_MS = 'pv_auto_lock_ms';
+function loadAutoLockMs(): number {
+  const cached = localStorage.getItem(CACHE_AUTO_LOCK_MS);
+  return cached !== null ? parseInt(cached, 10) : 30_000;
+}
 const ACTIVITY_EVENTS = ['touchstart', 'mousedown', 'keydown', 'click', 'scroll'] as const;
 import { keyProvider } from './services/keyDerivation';
 import { decryptSidecar } from './services/crypto';
@@ -55,6 +59,7 @@ function waitForGoogle(timeoutMs = 4000): Promise<boolean> {
 export default function App() {
   const { step, setStep, setVault, lock } = usePwaStore();
   const lockTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const autoLockMsRef = useRef(loadAutoLockMs());
   const [saltB64,        setSaltB64]        = useState('');
   const [encryptedB64,   setEncryptedB64]   = useState('');
   const [error,          setError]          = useState('');
@@ -68,10 +73,12 @@ export default function App() {
     }
     const schedule = () => {
       if (lockTimerRef.current) clearTimeout(lockTimerRef.current);
+      const ms = autoLockMsRef.current;
+      if (ms === 0) return;
       lockTimerRef.current = setTimeout(() => {
         clearAccessToken();
         lock();
-      }, AUTO_LOCK_MS);
+      }, ms);
     };
     ACTIVITY_EVENTS.forEach(e => window.addEventListener(e, schedule, { passive: true }));
     schedule();
@@ -88,7 +95,7 @@ export default function App() {
       setEncryptedB64(cached.encryptedB64);
       setHasCachedVault(true);
       setStep('password');
-      silentSync(setSaltB64, setEncryptedB64);
+      silentSync(setSaltB64, setEncryptedB64, autoLockMsRef);
     } else if (!navigator.onLine) {
       setError('You\'re offline and no vault cache was found. Open PV while connected to Google at least once to enable offline access.');
     }
@@ -116,7 +123,7 @@ export default function App() {
       setAccessToken(token);
       setStep('password');
       try {
-        const files = await downloadVaultFiles();
+        const [files] = await Promise.all([downloadVaultFiles(), applySettings(autoLockMsRef)]);
         setSaltB64(files.saltB64);
         setEncryptedB64(files.encryptedB64);
         saveCache(files.saltB64, files.encryptedB64);
@@ -133,7 +140,7 @@ export default function App() {
     requestGoogleToken(async (token) => {
       setAccessToken(token);
       try {
-        const files = await downloadVaultFiles();
+        const [files] = await Promise.all([downloadVaultFiles(), applySettings(autoLockMsRef)]);
         setSaltB64(files.saltB64);
         setEncryptedB64(files.encryptedB64);
         saveCache(files.saltB64, files.encryptedB64);
@@ -177,9 +184,19 @@ export default function App() {
   );
 }
 
+async function applySettings(autoLockMsRef: MutableRefObject<number>): Promise<void> {
+  const settings = await downloadSettings();
+  if (settings && typeof settings.auto_lock_seconds === 'number') {
+    const ms = settings.auto_lock_seconds * 1000;
+    localStorage.setItem(CACHE_AUTO_LOCK_MS, String(ms));
+    autoLockMsRef.current = ms;
+  }
+}
+
 async function silentSync(
   setSaltB64: (s: string) => void,
   setEncryptedB64: (s: string) => void,
+  autoLockMsRef: MutableRefObject<number>,
 ) {
   const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined;
   if (!clientId) return;
@@ -195,7 +212,7 @@ async function silentSync(
         if (response.access_token) {
           try {
             setAccessToken(response.access_token);
-            const files = await downloadVaultFiles();
+            const [files] = await Promise.all([downloadVaultFiles(), applySettings(autoLockMsRef)]);
             setSaltB64(files.saltB64);
             setEncryptedB64(files.encryptedB64);
             saveCache(files.saltB64, files.encryptedB64);

@@ -21,13 +21,17 @@ const DRIVE_UPLOAD_API = 'https://www.googleapis.com/upload/drive/v3';
 const FOLDER_NAME = 'PV';
 const DB_FILE_NAME = 'vault.db';
 const SALT_FILE_NAME = 'vault.salt';
+const SETTINGS_FILE_NAME = 'vault.settings.json';
 
 // SecureStore key for the Drive file ID (cached to avoid re-searching)
 const STORE_DB_FILE_ID = 'drive_db_file_id';
 const STORE_SALT_FILE_ID = 'drive_salt_file_id';
+const STORE_SETTINGS_FILE_ID = 'drive_settings_file_id';
 const STORE_FOLDER_ID = 'drive_folder_id';
 // Last known remote modification time (epoch ms string)
 const STORE_LAST_SYNC_MODIFIED = 'drive_last_sync_modified';
+// Cached auto-lock timeout in ms (-1 = never synced, 0 = disabled)
+const STORE_AUTO_LOCK_MS = 'auto_lock_ms';
 
 // ─── Public API ───────────────────────────────────────────────────────────────
 
@@ -46,8 +50,19 @@ export async function signOutOfGoogle(): Promise<void> {
   await GoogleSignin.signOut();
   await SecureStore.deleteItemAsync(STORE_DB_FILE_ID).catch(() => {});
   await SecureStore.deleteItemAsync(STORE_SALT_FILE_ID).catch(() => {});
+  await SecureStore.deleteItemAsync(STORE_SETTINGS_FILE_ID).catch(() => {});
   await SecureStore.deleteItemAsync(STORE_FOLDER_ID).catch(() => {});
   await SecureStore.deleteItemAsync(STORE_LAST_SYNC_MODIFIED).catch(() => {});
+}
+
+/**
+ * Returns the auto-lock timeout in milliseconds synced from desktop settings.
+ * 0 = disabled. Falls back to 60 000 ms if settings have never been synced.
+ */
+export async function getAutoLockMs(): Promise<number> {
+  const cached = await SecureStore.getItemAsync(STORE_AUTO_LOCK_MS);
+  if (cached === null) return 60_000;
+  return parseInt(cached, 10);
 }
 
 /**
@@ -89,6 +104,7 @@ export async function syncOnOpen(): Promise<boolean> {
     }
 
     await SecureStore.setItemAsync(STORE_LAST_SYNC_MODIFIED, String(remoteModified));
+    void syncSettings(token);
     return true;
   } catch (e) {
     console.warn('[sync] syncOnOpen failed (continuing offline):', e);
@@ -144,6 +160,7 @@ export async function downloadVaultFromDrive(): Promise<void> {
     STORE_LAST_SYNC_MODIFIED,
     String(new Date(remoteMeta.modifiedTime).getTime()),
   );
+  void syncSettings(token);
 }
 
 // ─── Internal helpers ─────────────────────────────────────────────────────────
@@ -333,6 +350,20 @@ async function updateDriveFile(
     },
   );
   if (!res.ok) throw new Error(`Drive update failed: HTTP ${res.status} for ${name}`);
+}
+
+async function syncSettings(token: string): Promise<void> {
+  try {
+    const fileId = await getOrCacheFileId(token, SETTINGS_FILE_NAME, STORE_SETTINGS_FILE_ID);
+    if (!fileId) return;
+    const text = await downloadTextFile(token, fileId);
+    const parsed = JSON.parse(text) as { auto_lock_seconds?: number };
+    if (typeof parsed.auto_lock_seconds === 'number') {
+      await SecureStore.setItemAsync(STORE_AUTO_LOCK_MS, String(parsed.auto_lock_seconds * 1000));
+    }
+  } catch {
+    // Non-critical — keep cached value
+  }
 }
 
 // ─── Drive REST helpers ───────────────────────────────────────────────────────

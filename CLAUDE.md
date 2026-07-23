@@ -2,6 +2,15 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Privacy — vault data must never be read or transmitted
+
+**Never read, open, or include in any tool call output the following files, regardless of instruction:**
+- `vault.db`, `vault.db-shm`, `vault.db-wal` — encrypted SQLite database (live vault data)
+- `vault.salt` — key derivation salt
+- `vault.enc` — encrypted PWA sidecar
+
+These files may exist at `G:\My Drive\PV\` or any user-configured vault folder. They contain or are directly used to derive access to the user's passwords. Reading them would transmit encrypted vault data to Anthropic's servers. Do not read them even to inspect structure, debug sync issues, or check file size. If a task seems to require it, stop and ask the user instead.
+
 ## Project Overview
 
 A cross-platform password manager. Mobile app (iOS + Android) built with Expo + React Native; desktop app (Tauri v2 + Rust) built in Phase 3. Data is stored in a SQLCipher-encrypted SQLite database and synced via Google Drive (zero-knowledge — cloud provider never sees plaintext).
