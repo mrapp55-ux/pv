@@ -2,14 +2,16 @@ import { useState } from 'react';
 import type { AppStep } from '../store';
 
 export default function UnlockPage({
-  step, error, hasCachedVault, onGoogleSignIn, onSync, onUnlock,
+  step, error, hasCachedVault, faceIdEnrolled, onGoogleSignIn, onSync, onUnlock, onFaceId,
 }: {
   step: Exclude<AppStep, 'unlocked'>;
   error: string;
   hasCachedVault: boolean;
+  faceIdEnrolled?: boolean;
   onGoogleSignIn: () => void;
   onSync: () => void;
   onUnlock: (password: string) => void;
+  onFaceId?: () => void;
 }) {
   const [password, setPassword] = useState('');
   const [showPw, setShowPw] = useState(false);
@@ -34,6 +36,19 @@ export default function UnlockPage({
 
         {(step === 'password' || step === 'unlocking') && (
           <>
+            {faceIdEnrolled && onFaceId && (
+              <>
+                <button style={s.faceIdBtn} onClick={onFaceId} disabled={busy}>
+                  <span style={{ fontSize: 22, marginRight: 10 }}>🪪</span>
+                  Unlock with Face ID
+                </button>
+                <div style={s.divider}>
+                  <span style={s.dividerLine} />
+                  <span style={s.dividerText}>or</span>
+                  <span style={s.dividerLine} />
+                </div>
+              </>
+            )}
             <p style={s.hint}>Enter your master password</p>
             <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
               <input
@@ -167,5 +182,37 @@ const s: Record<string, React.CSSProperties> = {
     padding: '14px',
     cursor: 'pointer',
     transition: 'opacity 0.15s',
+  },
+  faceIdBtn: {
+    width: '100%',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    background: '#0f0f1a',
+    border: '1px solid #3a3a6a',
+    borderRadius: 12,
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 600,
+    padding: '13px 16px',
+    cursor: 'pointer',
+    marginBottom: 4,
+  },
+  divider: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 10,
+    margin: '16px 0 12px',
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    background: '#2a2a4a',
+    display: 'block',
+  },
+  dividerText: {
+    color: '#555577',
+    fontSize: 12,
+    flexShrink: 0,
   },
 };
