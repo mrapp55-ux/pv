@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { usePwaStore } from '../store';
 import { clearAccessToken } from '../services/drive';
-import type { SidecarEntry } from '../types';
+import type { SidecarEntry, PasswordHistoryEntry } from '../types';
 
 const CLIPBOARD_CLEAR_MS = 30_000;
 
@@ -109,6 +109,7 @@ function EntryDetail({ entry, groupName, showGroup, onBack }: {
 }) {
   const [copied, setCopied] = useState<string | null>(null);
   const [showSQ, setShowSQ] = useState(false);
+  const [showPwHistory, setShowPwHistory] = useState(false);
   const clipTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   function copy(value: string, label: string) {
@@ -166,6 +167,21 @@ function EntryDetail({ entry, groupName, showGroup, onBack }: {
           </div>
         )}
 
+        {entry.password_history && entry.password_history.length > 0 && (
+          <div style={s.fieldBlock}>
+            <button
+              onClick={() => setShowPwHistory(v => !v)}
+              style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
+            >
+              <span style={s.fieldLabel}>Previous Passwords ({entry.password_history.length})</span>
+              <span style={{ fontSize: 13, color: '#6666aa', marginBottom: 5 }}>{showPwHistory ? '▲ Hide' : '▼ Show'}</span>
+            </button>
+            {showPwHistory && entry.password_history.map((h, i) => (
+              <PrevPwRow key={i} index={i} history={h} copied={copied} onCopy={() => copy(h.password, `OldPw${i}`)} label={`OldPw${i}`} />
+            ))}
+          </div>
+        )}
+
         <p style={s.meta}>Modified {new Date(entry.modified_at).toLocaleString()}</p>
       </div>
     </div>
@@ -184,6 +200,28 @@ function SQRow({ index, sq, copied, onCopy, label }: {
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <span style={{ flex: 1, fontSize: 14, color: '#fff', fontFamily: 'monospace' }}>
           {show ? sq.answer : '•'.repeat(Math.min(sq.answer.length, 16))}
+        </span>
+        <button style={s.iconAction} onClick={() => setShow(v => !v)}>{show ? '👁' : '🙈'}</button>
+        <button style={{ ...s.iconAction, color: copied === label ? '#2ecc71' : '#8888aa' }} onClick={onCopy}>
+          {copied === label ? '✓' : '📋'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function PrevPwRow({ index, history, copied, onCopy, label }: {
+  index: number; history: PasswordHistoryEntry; copied: string | null; onCopy: () => void; label: string;
+}) {
+  const [show, setShow] = useState(false);
+  return (
+    <div style={{ marginTop: index === 0 ? 8 : 4 }}>
+      <div style={{ fontSize: 12, color: '#8888aa', marginBottom: 4 }}>
+        Changed {new Date(history.changed_at).toLocaleString()}
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span style={{ flex: 1, fontSize: 14, color: '#fff', fontFamily: 'monospace', wordBreak: 'break-all' }}>
+          {show ? history.password : '•'.repeat(Math.min(history.password.length, 16))}
         </span>
         <button style={s.iconAction} onClick={() => setShow(v => !v)}>{show ? '👁' : '🙈'}</button>
         <button style={{ ...s.iconAction, color: copied === label ? '#2ecc71' : '#8888aa' }} onClick={onCopy}>

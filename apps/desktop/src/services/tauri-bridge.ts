@@ -12,6 +12,11 @@ export interface SecurityQuestion {
   answer: string;
 }
 
+export interface PasswordHistory {
+  password: string;
+  changed_at: number;
+}
+
 export interface Group {
   id: string;
   name: string;
@@ -38,6 +43,7 @@ export interface EntryDetail {
   group_id: string | null;
   created_at: number;
   modified_at: number;
+  password_history: PasswordHistory[];
 }
 
 export interface EntryInput {

@@ -9,6 +9,11 @@ export interface SecurityQuestion {
   answer: string;
 }
 
+export interface PasswordHistoryEntry {
+  password: string;
+  changed_at: number;
+}
+
 export interface SidecarEntry {
   id: string;
   title: string;
@@ -19,6 +24,7 @@ export interface SidecarEntry {
   security_questions: SecurityQuestion[] | null;
   group_id: string | null;
   modified_at: number;
+  password_history: PasswordHistoryEntry[];
 }
 
 export interface SidecarPayload {

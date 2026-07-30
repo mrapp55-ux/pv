@@ -12,7 +12,7 @@ use database::{
     delete_entry, get_entry, insert_metadata, init_schema, migrate_schema, list_entries,
     open_encrypted, create_entry, update_entry, get_salt, ensure_default_group,
     list_groups, create_group, rename_group, delete_group,
-    EntryDetail, EntryInput, EntryListItem, Group,
+    EntryDetail, EntryInput, EntryListItem, Group, PasswordHistory,
 };
 use biometric::{is_biometric_available, is_key_stored, request_windows_hello, retrieve_key, store_key};
 pub use sync::{
@@ -231,18 +231,18 @@ pub fn cmd_change_master_password(
         let sess_guard = state.session.lock().unwrap();
         let session   = sess_guard.as_ref().ok_or(VaultError::Locked)?;
 
-        let entries: Vec<(String, String, Option<String>, Option<String>)> = {
+        let entries: Vec<(String, String, Option<String>, Option<String>, Option<String>)> = {
             let mut stmt = conn.prepare(
-                "SELECT id, password_enc, notes_enc, security_questions_enc
+                "SELECT id, password_enc, notes_enc, security_questions_enc, password_history_enc
                  FROM vault_entries WHERE deleted_at IS NULL"
             )?;
-            let rows = stmt.query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)))?
+            let rows = stmt.query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?)))?
                 .collect::<rusqlite::Result<Vec<_>>>()?;
             rows
         };
 
         conn.execute_batch("BEGIN")?;
-        for (id, pw_enc, notes_enc, sq_enc) in &entries {
+        for (id, pw_enc, notes_enc, sq_enc, ph_enc) in &entries {
             let new_pw = {
                 let plain = decrypt_field(&session.field_password, pw_enc)?;
                 encrypt_field(&new_fp, &plain)?
@@ -253,9 +253,12 @@ pub fn cmd_change_master_password(
             let new_sq = sq_enc.as_deref()
                 .map(|sq| { let p = decrypt_field(&session.field_security_questions, sq)?; encrypt_field(&new_fsq, &p) })
                 .transpose()?;
+            let new_ph = ph_enc.as_deref()
+                .map(|ph| { let p = decrypt_field(&session.field_password, ph)?; encrypt_field(&new_fp, &p) })
+                .transpose()?;
             conn.execute(
-                "UPDATE vault_entries SET password_enc=?1, notes_enc=?2, security_questions_enc=?3 WHERE id=?4",
-                rusqlite::params![new_pw, new_notes, new_sq, id],
+                "UPDATE vault_entries SET password_enc=?1, notes_enc=?2, security_questions_enc=?3, password_history_enc=?4 WHERE id=?5",
+                rusqlite::params![new_pw, new_notes, new_sq, new_ph, id],
             )?;
         }
         conn.execute("UPDATE vault_metadata SET salt=?1 WHERE id=1", rusqlite::params![new_salt_b64])?;
@@ -312,6 +315,7 @@ struct SidecarEntry {
     security_questions: Option<Vec<database::SecurityQuestion>>,
     group_id: Option<String>,
     modified_at: i64,
+    password_history: Vec<PasswordHistory>,
 }
 
 #[derive(serde::Serialize)]
@@ -331,7 +335,7 @@ fn write_sidecar_inner(conn: &rusqlite::Connection, session: &SessionKey) -> Res
     let groups = list_groups(conn)?;
 
     let mut stmt = conn.prepare(
-        "SELECT id, title, username, password_enc, url, notes_enc, security_questions_enc, group_id, modified_at
+        "SELECT id, title, username, password_enc, url, notes_enc, security_questions_enc, group_id, modified_at, password_history_enc
          FROM vault_entries WHERE deleted_at IS NULL ORDER BY title COLLATE NOCASE ASC"
     )?;
     let entries: Vec<SidecarEntry> = stmt.query_map([], |row| {
@@ -345,17 +349,22 @@ fn write_sidecar_inner(conn: &rusqlite::Connection, session: &SessionKey) -> Res
             row.get::<_, Option<String>>(6)?,
             row.get::<_, Option<String>>(7)?,
             row.get::<_, i64>(8)?,
+            row.get::<_, Option<String>>(9)?,
         ))
     })?
     .filter_map(|r| r.ok())
-    .filter_map(|(id, title, username, pw_enc, url, notes_enc, sq_enc, group_id, modified_at)| {
+    .filter_map(|(id, title, username, pw_enc, url, notes_enc, sq_enc, group_id, modified_at, ph_enc)| {
         let password = decrypt_field(&session.field_password, &pw_enc).ok()?;
         let notes = notes_enc.as_deref().and_then(|n| decrypt_field(&session.field_notes, n).ok());
         let security_questions = sq_enc.as_deref().and_then(|sq| {
             let json = decrypt_field(&session.field_security_questions, sq).ok()?;
             serde_json::from_str::<Vec<database::SecurityQuestion>>(&json).ok()
         });
-        Some(SidecarEntry { id, title, username, password, url, notes, security_questions, group_id, modified_at })
+        let password_history = ph_enc.as_deref().and_then(|ph| {
+            let json = decrypt_field(&session.field_password, ph).ok()?;
+            serde_json::from_str::<Vec<PasswordHistory>>(&json).ok()
+        }).unwrap_or_default();
+        Some(SidecarEntry { id, title, username, password, url, notes, security_questions, group_id, modified_at, password_history })
     })
     .collect();
 

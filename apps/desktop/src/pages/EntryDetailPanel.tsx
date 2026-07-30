@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { deleteEntry, getEntry, updateEntry, type EntryDetail, type SecurityQuestion, type Group } from '../services/tauri-bridge';
+import { deleteEntry, getEntry, updateEntry, type EntryDetail, type PasswordHistory, type SecurityQuestion, type Group } from '../services/tauri-bridge';
 
 const CLIPBOARD_CLEAR_MS = 30_000;
 
@@ -15,6 +15,7 @@ export default function EntryDetailPanel({
   const [editing, setEditing] = useState(false);
   const [showPw, setShowPw] = useState(true);
   const [showSQView, setShowSQView] = useState(false);
+  const [showPwHistory, setShowPwHistory] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -195,7 +196,53 @@ export default function EntryDetailPanel({
         </div>
       )}
 
+      {entry.password_history && entry.password_history.length > 0 && (
+        <div style={s.fieldBlock}>
+          <button
+            onClick={() => setShowPwHistory(v => !v)}
+            style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'inherit' }}
+          >
+            <span className="field-label" style={{ margin: 0 }}>Previous Passwords ({entry.password_history.length})</span>
+            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{showPwHistory ? '▲ Hide' : '▼ Show'}</span>
+          </button>
+          {showPwHistory && entry.password_history.map((h, i) => (
+            <PreviousPasswordRow key={i} index={i} history={h} copyField={copyField} copied={copied} />
+          ))}
+        </div>
+      )}
+
       <p style={s.meta}>Modified {new Date(entry.modified_at).toLocaleString()}</p>
+    </div>
+  );
+}
+
+function PreviousPasswordRow({ index, history, copyField, copied }: {
+  index: number;
+  history: PasswordHistory;
+  copyField: (v: string, field: string) => void;
+  copied: string | null;
+}) {
+  const [show, setShow] = useState(false);
+  const field = `OldPw${index}`;
+  return (
+    <div style={{ marginTop: index === 0 ? 8 : 0, marginBottom: 8 }}>
+      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 3 }}>
+        Changed {new Date(history.changed_at).toLocaleString()}
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <span style={{ flex: 1, fontSize: 13, fontFamily: 'monospace', color: 'var(--text)', wordBreak: 'break-all' }}>
+          {show ? history.password : '•'.repeat(Math.min(history.password.length, 20))}
+        </span>
+        <button className="icon-btn" onClick={() => setShow(v => !v)}>{show ? '👁' : '🙈'}</button>
+        <button
+          className="icon-btn"
+          onClick={() => copyField(history.password, field)}
+          title="Copy"
+          style={{ color: copied === field ? 'var(--success)' : undefined }}
+        >
+          {copied === field ? '✓' : '⎘'}
+        </button>
+      </div>
     </div>
   );
 }

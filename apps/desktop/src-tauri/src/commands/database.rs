@@ -30,6 +30,9 @@ pub fn migrate_schema(conn: &Connection) -> Result<()> {
     let _ = conn.execute_batch(
         "ALTER TABLE vault_entries ADD COLUMN group_id TEXT;"
     );
+    let _ = conn.execute_batch(
+        "ALTER TABLE vault_entries ADD COLUMN password_history_enc TEXT;"
+    );
     conn.execute_batch(
         "CREATE TABLE IF NOT EXISTS groups (
             id         TEXT PRIMARY KEY,
@@ -212,6 +215,12 @@ pub struct SecurityQuestion {
     pub answer: String,
 }
 
+#[derive(serde::Serialize, serde::Deserialize, Clone)]
+pub struct PasswordHistory {
+    pub password: String,
+    pub changed_at: i64,
+}
+
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct EntryListItem {
     pub id: String,
@@ -234,6 +243,7 @@ pub struct EntryDetail {
     pub group_id: Option<String>,
     pub created_at: i64,
     pub modified_at: i64,
+    pub password_history: Vec<PasswordHistory>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -269,22 +279,22 @@ pub fn list_entries(conn: &Connection) -> Result<Vec<EntryListItem>> {
 }
 
 pub fn get_entry(conn: &Connection, session: &SessionKey, id: &str) -> Result<EntryDetail> {
-    let row: rusqlite::Result<(String, String, Option<String>, String, Option<String>, Option<String>, Option<String>, Option<String>, i64, i64)> =
+    let row: rusqlite::Result<(String, String, Option<String>, String, Option<String>, Option<String>, Option<String>, Option<String>, i64, i64, Option<String>)> =
         conn.query_row(
-            "SELECT id, title, username, password_enc, url, notes_enc, security_questions_enc, group_id, created_at, modified_at
+            "SELECT id, title, username, password_enc, url, notes_enc, security_questions_enc, group_id, created_at, modified_at, password_history_enc
              FROM vault_entries WHERE id = ?1 AND deleted_at IS NULL",
             params![id],
             |row| Ok((
                 row.get(0)?, row.get(1)?, row.get(2)?,
                 row.get(3)?, row.get(4)?, row.get(5)?,
-                row.get(6)?, row.get(7)?, row.get(8)?, row.get(9)?,
+                row.get(6)?, row.get(7)?, row.get(8)?, row.get(9)?, row.get(10)?,
             )),
         );
 
     match row {
         Err(rusqlite::Error::QueryReturnedNoRows) => Err(VaultError::NotFound(id.into())),
         Err(e) => Err(e.into()),
-        Ok((eid, title, username, password_enc, url, notes_enc, sq_enc, group_id, created_at, modified_at)) => {
+        Ok((eid, title, username, password_enc, url, notes_enc, sq_enc, group_id, created_at, modified_at, ph_enc)) => {
             let password = decrypt_field(&session.field_password, &password_enc)?;
             let notes = notes_enc.map(|n| decrypt_field(&session.field_notes, &n)).transpose()?;
             let security_questions = sq_enc.map(|sq| {
@@ -292,7 +302,19 @@ pub fn get_entry(conn: &Connection, session: &SessionKey, id: &str) -> Result<En
                 serde_json::from_str::<Vec<SecurityQuestion>>(&json)
                     .map_err(|e| VaultError::Crypto(e.to_string()))
             }).transpose()?;
-            Ok(EntryDetail { id: eid, title, username, password, url, notes, security_questions, group_id, created_at, modified_at })
+            let password_history = decrypt_password_history(session, ph_enc.as_deref())?;
+            Ok(EntryDetail { id: eid, title, username, password, url, notes, security_questions, group_id, created_at, modified_at, password_history })
+        }
+    }
+}
+
+fn decrypt_password_history(session: &SessionKey, ph_enc: Option<&str>) -> Result<Vec<PasswordHistory>> {
+    match ph_enc {
+        None => Ok(vec![]),
+        Some(enc) => {
+            let json = decrypt_field(&session.field_password, enc)?;
+            serde_json::from_str::<Vec<PasswordHistory>>(&json)
+                .map_err(|e| VaultError::Crypto(e.to_string()))
         }
     }
 }
@@ -315,14 +337,35 @@ pub fn create_entry(conn: &Connection, session: &SessionKey, input: EntryInput, 
 
 pub fn update_entry(conn: &Connection, session: &SessionKey, id: &str, input: EntryInput, device_id: &str) -> Result<()> {
     let now = now_ms();
-    let password_enc = encrypt_field(&session.field_password, &input.password)?;
+
+    // Read current password + history to detect changes (AES-GCM uses random IV so ciphertext comparison is unreliable)
+    let (old_pw_enc, old_hist_enc): (String, Option<String>) = conn.query_row(
+        "SELECT password_enc, password_history_enc FROM vault_entries WHERE id = ?1 AND deleted_at IS NULL",
+        params![id],
+        |row| Ok((row.get(0)?, row.get(1)?)),
+    ).map_err(|e| if e == rusqlite::Error::QueryReturnedNoRows { VaultError::NotFound(id.into()) } else { e.into() })?;
+
+    let old_password = decrypt_field(&session.field_password, &old_pw_enc)?;
+    let new_password_enc = encrypt_field(&session.field_password, &input.password)?;
+
+    let new_history_enc = if old_password != input.password {
+        let mut history = decrypt_password_history(session, old_hist_enc.as_deref())?;
+        history.insert(0, PasswordHistory { password: old_password, changed_at: now });
+        history.truncate(3);
+        let json = serde_json::to_string(&history).map_err(|e| VaultError::Other(e.to_string()))?;
+        Some(encrypt_field(&session.field_password, &json)?)
+    } else {
+        old_hist_enc
+    };
+
     let notes_enc = input.notes.as_deref().map(|n| encrypt_field(&session.field_notes, n)).transpose()?;
     let sq_enc = encrypt_security_questions(session, &input.security_questions)?;
 
     let rows = conn.execute(
         "UPDATE vault_entries SET title=?1, username=?2, password_enc=?3, url=?4, notes_enc=?5,
-         security_questions_enc=?6, group_id=?7, modified_at=?8, modified_by=?9 WHERE id=?10 AND deleted_at IS NULL",
-        params![input.title, input.username, password_enc, input.url, notes_enc, sq_enc, input.group_id, now, device_id, id],
+         security_questions_enc=?6, group_id=?7, modified_at=?8, modified_by=?9, password_history_enc=?10
+         WHERE id=?11 AND deleted_at IS NULL",
+        params![input.title, input.username, new_password_enc, input.url, notes_enc, sq_enc, input.group_id, now, device_id, new_history_enc, id],
     )?;
     if rows == 0 { return Err(VaultError::NotFound(id.into())); }
     log_sync(conn, id, device_id, "update")?;
