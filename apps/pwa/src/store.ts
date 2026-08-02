@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { SidecarEntry, SidecarGroup } from './types';
+import { clearResumeSession } from './services/resumeSession';
 
 export type AppStep = 'google' | 'password' | 'unlocking' | 'unlocked';
 
@@ -23,6 +24,7 @@ export const usePwaStore = create<PwaStore>((set) => ({
   setVault: (entries, groups) => set({ entries, groups }),
   setSelectedGroupId: (selectedGroupId) => set({ selectedGroupId }),
   lock: () => {
+    clearResumeSession();
     const hasCached = !!(localStorage.getItem('pv_salt') && localStorage.getItem('pv_enc'));
     set({ step: hasCached ? 'password' : 'google', entries: [], groups: [], selectedGroupId: null });
   },

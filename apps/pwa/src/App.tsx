@@ -10,6 +10,7 @@ function loadAutoLockMs(): number {
 const ACTIVITY_EVENTS = ['touchstart', 'mousedown', 'keydown', 'click', 'scroll'] as const;
 import { keyProvider, hasFaceIdEnrolled, enrollFaceId, unlockWithFaceId } from './services/keyDerivation';
 import { decryptSidecar } from './services/crypto';
+import { persistResumeSession, refreshResumeDeadline, tryResumeSession, clearResumeSession } from './services/resumeSession';
 import UnlockPage from './pages/UnlockPage';
 import VaultPage from './pages/VaultPage';
 
@@ -76,6 +77,7 @@ export default function App() {
     const schedule = () => {
       if (lockTimerRef.current) clearTimeout(lockTimerRef.current);
       const ms = autoLockMsRef.current;
+      refreshResumeDeadline(ms);
       if (ms === 0) return;
       lockTimerRef.current = setTimeout(() => {
         clearAccessToken();
@@ -91,20 +93,39 @@ export default function App() {
   }, [step]);
 
   useEffect(() => {
-    const cached = loadCache();
-    if (cached) {
-      setSaltB64(cached.saltB64);
-      setEncryptedB64(cached.encryptedB64);
-      setHasCachedVault(true);
-      if (hasFaceIdEnrolled()) {
-        void handleFaceIdUnlock(cached.encryptedB64);
-      } else {
-        setStep('password');
-        silentSync(setSaltB64, setEncryptedB64, autoLockMsRef);
+    void (async () => {
+      const cached = loadCache();
+      if (cached) {
+        setSaltB64(cached.saltB64);
+        setEncryptedB64(cached.encryptedB64);
+        setHasCachedVault(true);
+
+        // Cold restart within the auto-lock window (e.g. iOS killed the app on screen
+        // lock) — resume straight to unlocked instead of forcing a re-prompt.
+        const resumedKey = await tryResumeSession();
+        if (resumedKey) {
+          try {
+            const payload = await decryptSidecar(resumedKey, cached.encryptedB64);
+            masterKeyRef.current = resumedKey;
+            setVault(payload.entries, payload.groups);
+            setStep('unlocked');
+            silentSync(setSaltB64, setEncryptedB64, autoLockMsRef);
+            return;
+          } catch {
+            clearResumeSession();
+          }
+        }
+
+        if (hasFaceIdEnrolled()) {
+          void handleFaceIdUnlock(cached.encryptedB64);
+        } else {
+          setStep('password');
+          silentSync(setSaltB64, setEncryptedB64, autoLockMsRef);
+        }
+      } else if (!navigator.onLine) {
+        setError('You\'re offline and no vault cache was found. Open PV while connected to Google at least once to enable offline access.');
       }
-    } else if (!navigator.onLine) {
-      setError('You\'re offline and no vault cache was found. Open PV while connected to Google at least once to enable offline access.');
-    }
+    })();
   }, []);
 
   // Zero the cached master key and hide the enrollment promo when the vault locks
@@ -182,6 +203,7 @@ export default function App() {
       masterKeyRef.current = masterKey;
       setVault(payload.entries, payload.groups);
       setStep('unlocked');
+      void persistResumeSession(masterKey, autoLockMsRef.current);
       silentSync(setSaltB64, setEncryptedB64, autoLockMsRef);
     } catch {
       setError('Face ID key mismatch — please use your master password.');
@@ -198,6 +220,7 @@ export default function App() {
       masterKeyRef.current = masterKey;
       setVault(payload.entries, payload.groups);
       setStep('unlocked');
+      void persistResumeSession(masterKey, autoLockMsRef.current);
     } catch {
       setError('Wrong password, or the vault file is corrupt.');
       setStep('password');
