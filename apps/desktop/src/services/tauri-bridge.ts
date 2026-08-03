@@ -191,3 +191,16 @@ export const writeFile = (path: string, data: number[]) =>
 /** Copy vault.db + vault.salt to destFolder with a timestamp suffix. Returns the filename stem. */
 export const backupVault = (destFolder: string) =>
   invoke<string>('cmd_backup_vault', { destFolder });
+
+/** Open a native file picker filtered to vault backup .db files. Returns the chosen path, or null if cancelled. */
+export async function pickBackupFile(): Promise<string | null> {
+  const result = await open({
+    filters: [{ name: 'Vault Backup', extensions: ['db'] }],
+    title: 'Select Vault Backup (.db)',
+  });
+  return typeof result === 'string' ? result : null;
+}
+
+/** Overwrite the live vault with a backup pair (backupDbPath + matching .salt alongside it). */
+export const restoreVault = (backupDbPath: string) =>
+  invoke<void>('cmd_restore_vault', { backupDbPath });

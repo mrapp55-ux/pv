@@ -233,6 +233,29 @@ pub fn cmd_backup_vault(dest_folder: String) -> crate::error::Result<String> {
     Ok(stem)
 }
 
+/// Overwrite vault.db + vault.salt with a previously-made backup pair.
+/// `backup_db_path` is the path to the chosen `.db` file; the matching `.salt` file is
+/// expected alongside it with the same stem, as written by cmd_backup_vault.
+pub fn restore_vault_files(backup_db_path: &str) -> Result<()> {
+    let src_db = PathBuf::from(backup_db_path);
+    if !src_db.exists() {
+        return Err(VaultError::Other("Backup file not found".into()));
+    }
+    let src_salt = src_db.with_extension("salt");
+    if !src_salt.exists() {
+        return Err(VaultError::Other("Matching .salt file not found next to the backup".into()));
+    }
+
+    let dest_db = vault_path();
+    let dest_salt = salt_path();
+    if let Some(parent) = dest_db.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    std::fs::copy(&src_db, &dest_db)?;
+    std::fs::copy(&src_salt, &dest_salt)?;
+    Ok(())
+}
+
 fn epoch_to_datetime_str(secs: u64) -> String {
     let time_of_day = secs % 86400;
     let days = secs / 86400;

@@ -5,7 +5,7 @@ import {
   getVaultLocation, setUseGoogleDrive, setVaultFolder, relocateVault, pickVaultFolder,
   deleteVault, getAutoLockSeconds, setAutoLockSeconds, changeMasterPassword,
   createEntry, createGroup, renameGroup, deleteGroup,
-  getEntry, writeFile, saveFileDialog, backupVault,
+  getEntry, writeFile, saveFileDialog, backupVault, pickBackupFile, restoreVault,
   type VaultLocationInfo, type Group,
 } from '../services/tauri-bridge';
 import { useVaultStore } from '../store/vault';
@@ -256,6 +256,9 @@ function SettingsPanel({
   const [backingUp, setBackingUp] = useState(false);
   const [backupMsg, setBackupMsg] = useState('');
   const [backupErr, setBackupErr] = useState('');
+  const [restoring, setRestoring] = useState(false);
+  const [restoreErr, setRestoreErr] = useState('');
+  const [confirmingRestorePath, setConfirmingRestorePath] = useState<string | null>(null);
 
 
   useEffect(() => {
@@ -517,6 +520,27 @@ function SettingsPanel({
     }
   }
 
+  async function handlePickRestoreFile() {
+    setRestoreErr('');
+    const path = await pickBackupFile();
+    if (path) setConfirmingRestorePath(path);
+  }
+
+  async function handleConfirmRestore() {
+    if (!confirmingRestorePath) return;
+    setRestoring(true);
+    setRestoreErr('');
+    try {
+      await restoreVault(confirmingRestorePath);
+      setConfirmingRestorePath(null);
+      reset();
+      setAuthState('locked');
+    } catch (e) {
+      setRestoreErr(String(e));
+      setRestoring(false);
+    }
+  }
+
   // ── Danger zone ───────────────────────────────────────────────────────────
 
   async function handleDeleteVault() {
@@ -734,9 +758,35 @@ function SettingsPanel({
         </button>
         {backupErr && <p style={ss.error}>{backupErr}</p>}
         {backupMsg && <p style={ss.success}>{backupMsg}</p>}
-        <button className="ghost" onClick={handleBackup} disabled={backingUp} style={{ display: 'block' }}>
+        <button className="ghost" onClick={handleBackup} disabled={backingUp} style={{ display: 'block', marginBottom: 10 }}>
           {backingUp ? 'Backing up…' : 'Backup Vault…'}
         </button>
+
+        {restoreErr && <p style={ss.error}>{restoreErr}</p>}
+        {confirmingRestorePath ? (
+          <div style={{ background: 'rgba(231,76,60,0.08)', border: '1px solid rgba(231,76,60,0.3)', borderRadius: 6, padding: '10px 12px' }}>
+            <p style={{ fontSize: 12, color: 'var(--danger)', margin: '0 0 8px' }}>
+              Restore from <strong>{confirmingRestorePath.split(/[\\/]/).pop()}</strong>?
+              This overwrites the current vault and cannot be undone. You'll need to unlock again afterward.
+            </p>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button
+                onClick={() => void handleConfirmRestore()}
+                disabled={restoring}
+                style={{ background: 'var(--danger)', color: '#fff', border: 'none', borderRadius: 6, padding: '6px 14px', cursor: 'pointer', fontWeight: 600, fontSize: 13 }}
+              >
+                {restoring ? 'Restoring…' : 'Restore'}
+              </button>
+              <button className="ghost" onClick={() => setConfirmingRestorePath(null)} disabled={restoring} style={{ padding: '6px 14px', fontSize: 13 }}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : (
+          <button className="ghost" onClick={() => void handlePickRestoreFile()} style={{ display: 'block' }}>
+            Restore from Backup…
+          </button>
+        )}
       </section>
 
       {/* ── Danger Zone ───────────────────────────────────────────────── */}

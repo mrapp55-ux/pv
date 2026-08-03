@@ -48,6 +48,7 @@ pub fn run() {
             cmd_change_master_password,
             cmd_write_file,
             cmd_backup_vault,
+            cmd_restore_vault,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

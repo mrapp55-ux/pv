@@ -282,6 +282,21 @@ pub fn cmd_change_master_password(
     Ok(())
 }
 
+/// Restore vault.db + vault.salt from a previously-made backup pair, overwriting the
+/// live vault. Closes the session and DB first — the backup's master password may
+/// predate a later change, so the user re-enters it on the unlock screen afterward.
+#[tauri::command]
+pub fn cmd_restore_vault(backup_db_path: String, state: State<AppState>) -> Result<()> {
+    *state.session.lock().unwrap() = None;
+    *state.db.lock().unwrap() = None;
+
+    sync::restore_vault_files(&backup_db_path)?;
+
+    // The restored vault's password may differ from what's stored in the OS keychain.
+    let _ = biometric::delete_key();
+    Ok(())
+}
+
 /// Move vault files to a new folder while session is active, then reopen from new location.
 #[tauri::command]
 pub fn cmd_relocate_vault(new_folder: String, state: State<AppState>) -> Result<()> {
