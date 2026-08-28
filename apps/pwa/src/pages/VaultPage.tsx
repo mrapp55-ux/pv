@@ -173,7 +173,7 @@ function EntryDetail({ entry, groupName, showGroup, onBack }: {
               onClick={() => setShowPwHistory(v => !v)}
               style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
             >
-              <span style={s.fieldLabel}>Previous Passwords ({entry.password_history.length})</span>
+              <span style={s.fieldLabel}>Previous Password</span>
               <span style={{ fontSize: 13, color: '#6666aa', marginBottom: 5 }}>{showPwHistory ? '▲ Hide' : '▼ Show'}</span>
             </button>
             {showPwHistory && entry.password_history.map((h, i) => (

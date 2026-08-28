@@ -202,7 +202,7 @@ export default function EntryDetailPanel({
             onClick={() => setShowPwHistory(v => !v)}
             style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'inherit' }}
           >
-            <span className="field-label" style={{ margin: 0 }}>Previous Passwords ({entry.password_history.length})</span>
+            <span className="field-label" style={{ margin: 0 }}>Previous Password</span>
             <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{showPwHistory ? '▲ Hide' : '▼ Show'}</span>
           </button>
           {showPwHistory && entry.password_history.map((h, i) => (

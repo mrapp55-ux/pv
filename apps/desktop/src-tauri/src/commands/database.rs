@@ -351,7 +351,7 @@ pub fn update_entry(conn: &Connection, session: &SessionKey, id: &str, input: En
     let new_history_enc = if old_password != input.password {
         let mut history = decrypt_password_history(session, old_hist_enc.as_deref())?;
         history.insert(0, PasswordHistory { password: old_password, changed_at: now });
-        history.truncate(3);
+        history.truncate(1);
         let json = serde_json::to_string(&history).map_err(|e| VaultError::Other(e.to_string()))?;
         Some(encrypt_field(&session.field_password, &json)?)
     } else {
